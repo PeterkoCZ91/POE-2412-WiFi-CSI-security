@@ -1,0 +1,13 @@
+.pio/
+.platformio/
+.vscode/
+.claude/
+__pycache__/
+*.pyc
+*.log
+*.DS_Store
+*.bin
+*.tar.gz
+*.zip
+dist/
+include/secrets_*.h
