@@ -282,16 +282,16 @@ void TelegramService::processCommand(const String& command, const String& chatId
         if (_radar && _radar->isEngineeringMode()) {
             sendMessage("💡 Light level: *" + String(_radar->getLightLevel()) + "* (0-255)");
         } else {
-            sendMessage("⚠️ Engineering Mode must be active to read light level (/eng_on).");
+            sendMessage("⚠️ Engineering Mode must be active for light reading (/eng_on).");
         }
     }
     else if (cmd == "/eng_on") {
         if (_radar && _radar->setEngineeringMode(true)) sendMessage("✅ Engineering Mode ZAPNUT");
-        else sendMessage("❌ Failed to enable");
+        else sendMessage("❌ Error enabling");
     }
     else if (cmd == "/eng_off") {
         if (_radar && _radar->setEngineeringMode(false)) sendMessage("✅ Engineering Mode VYPNUT");
-        else sendMessage("❌ Failed to disable");
+        else sendMessage("❌ Error disabling");
     }
     else if (cmd == "/restart") {
         sendMessage("🔄 Restarting...");
@@ -311,7 +311,7 @@ void TelegramService::processCommand(const String& command, const String& chatId
                 if (started)
                     sendMessage("📡 Static learn started (3 min). Results will be sent automatically.");
                 else
-                    sendMessage("❌ Failed to start learn.");
+                    sendMessage("❌ Learn failed to start.");
             }
         }
     }

@@ -184,6 +184,86 @@ void setupTelemetryRoutes() {
         serializeJson(doc, resp);
         request->send(200, "application/json", resp);
     });
+
+    // Auto-create ignore_static_only zone from learn results
+    _deps.server->on("/api/radar/apply-learn", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return;
+
+        // Get learn results
+        JsonDocument learnDoc;
+        _deps.radar->getLearnResultJson(learnDoc);
+
+        if (!(learnDoc["suggest_ready"] | false)) {
+            request->send(409, "text/plain", "No valid learn data — run /learn first");
+            return;
+        }
+
+        int minCm = learnDoc["suggest_min_cm"] | 0;
+        int maxCm = learnDoc["suggest_max_cm"] | 0;
+        int topGate = learnDoc["top_gate"] | 0;
+
+        // Optional custom name from query param
+        String zoneName = "refl_g" + String(topGate);
+        if (request->hasParam("name")) {
+            zoneName = request->getParam("name")->value();
+            zoneName = zoneName.substring(0, 15); // fit AlertZone.name[16]
+        }
+
+        // Parse existing zones
+        JsonDocument zonesDoc;
+        String currentZones;
+        if (_deps.zonesMutex && xSemaphoreTake(*_deps.zonesMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            currentZones = *_deps.zonesJson;
+            xSemaphoreGive(*_deps.zonesMutex);
+        } else {
+            currentZones = "[]";
+        }
+        deserializeJson(zonesDoc, currentZones);
+        JsonArray arr = zonesDoc.to<JsonArray>();
+
+        // Check for overlapping zone
+        for (JsonObject z : arr) {
+            int zMin = z["min"] | 0;
+            int zMax = z["max"] | 0;
+            if (minCm <= zMax && maxCm >= zMin) {
+                request->send(409, "text/plain",
+                    "Overlaps with existing zone '" + String((const char*)(z["name"] | "?")) + "' (" + String(zMin) + "-" + String(zMax) + "cm)");
+                return;
+            }
+        }
+
+        // Append new ignore_static_only zone
+        JsonObject newZone = arr.add<JsonObject>();
+        newZone["name"] = zoneName;
+        newZone["min"] = minCm;
+        newZone["max"] = maxCm;
+        newZone["level"] = 0;
+        newZone["delay"] = 0;
+        newZone["enabled"] = true;
+        newZone["alarm_behavior"] = 3;  // ignore_static_only
+
+        String newJson;
+        serializeJson(zonesDoc, newJson);
+
+        // Schedule zones update (same mechanism as POST /api/zones)
+        if (_deps.zonesMutex && xSemaphoreTake(*_deps.zonesMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            *_deps.pendingZonesJson = newJson;
+            *_deps.pendingZonesUpdate = true;
+            xSemaphoreGive(*_deps.zonesMutex);
+        }
+
+        DBG("WEB", "Auto-zone from learn: %s %d-%dcm (behavior=3)", zoneName.c_str(), minCm, maxCm);
+
+        JsonDocument respDoc;
+        respDoc["status"] = "created";
+        respDoc["zone_name"] = zoneName;
+        respDoc["min_cm"] = minCm;
+        respDoc["max_cm"] = maxCm;
+        respDoc["alarm_behavior"] = 3;
+        String resp;
+        serializeJson(respDoc, resp);
+        request->send(200, "application/json", resp);
+    });
 }
 
 void setupConfigRoutes() {
@@ -541,7 +621,7 @@ void setupConfigRoutes() {
                 if (doc["mqtt_id"].is<String>()) _deps.preferences->putString("mqtt_id", doc["mqtt_id"].as<String>());
                 if (doc["auth_user"].is<String>() && doc["auth_user"].as<String>() != "***") _deps.preferences->putString("auth_user", doc["auth_user"].as<String>());
                 if (doc["auth_pass"].is<String>() && doc["auth_pass"].as<String>() != "***") _deps.preferences->putString("auth_pass", doc["auth_pass"].as<String>());
-                // bk_ssid/bk_pass removed — POE board uses Ethernet
+                // bk_ssid/bk_pass removed — POE board has no WiFi
                 if (doc["radar_res"].is<float>()) _deps.preferences->putFloat("radar_res", doc["radar_res"].as<float>());
                 if (doc["led_start"].is<uint16_t>()) _deps.preferences->putUInt("led_start", doc["led_start"].as<uint16_t>());
                 if (doc["hold_time"].is<unsigned long>()) _deps.preferences->putULong("hold_time", doc["hold_time"].as<unsigned long>());
@@ -634,7 +714,8 @@ void setupSystemRoutes() {
         response->addHeader("Connection", "close");
         request->send(response);
         if (success) {
-            DBG("OTA", "Update finished, rebooting...");
+            DBG("OTA", "Update finished, delaying 500ms for response flush before reboot...");
+            delay(500);  // Let HTTP response pass through nginx proxy before reboot
             *_deps.shouldReboot = true;
         }
     }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -661,11 +742,23 @@ void setupSystemRoutes() {
         }
         if (final) {
             if (Update.end(true)) {
-                DBG("OTA", "Update success: %u B", index + len);
+                DBG("OTA", "Update success: %u B — reboot scheduled", index + len);
+                *_deps.shouldReboot = true;  // Reboot even if response never sends (nginx proxy 502)
             } else {
                 Update.printError(Serial);
             }
         }
+    });
+
+    // Debug log ring buffer — remote access to last 4KB of DBG() output
+    _deps.server->on("/api/debug", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return;
+        request->send(200, "text/plain", DebugLog::instance().read());
+    });
+    _deps.server->on("/api/debug", HTTP_DELETE, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return;
+        DebugLog::instance().clear();
+        request->send(200, "text/plain", "cleared");
     });
 
     _deps.server->on("/api/restart", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -716,7 +809,7 @@ void setupSystemRoutes() {
             int stat = request->getParam("stat")->value().toInt();
 
             if (gate >= 0 && gate <= 13 && mov >= 0 && mov <= 100 && stat >= 0 && stat <= 100) {
-                // Get current values and modify single gate
+                // Get current values and modify just one gate
                 const uint8_t* currentMov = _deps.radar->getMotionSensitivityArray();
                 const uint8_t* currentStat = _deps.radar->getStaticSensitivityArray();
 
@@ -1026,7 +1119,7 @@ void setupLogRoutes() {
         if (!checkAuth(request)) return;
         JsonDocument doc;
         _deps.eventLog->getEventsJSON(doc, 0, 500, -1);
-        JsonArray arr = doc.as<JsonArray>();
+        JsonArray arr = doc["events"].as<JsonArray>();
 
         String csv = "timestamp,type,distance_cm,energy,message\r\n";
         for (JsonObject obj : arr) {
@@ -1343,10 +1436,24 @@ void setupCSIRoutes() {
             doc["wifi_rssi"]   = _deps.csiService->getWifiRSSI();
             doc["wifi_ssid"]   = _deps.csiService->getWifiSSID();
             doc["idle_ready"]  = _deps.csiService->isIdleInitialized();
+            doc["traffic_gen"]  = _deps.csiService->isTrafficGenRunning();
+            doc["traffic_port"] = _deps.csiService->getTrafficPort();
+            doc["traffic_icmp"] = _deps.csiService->getTrafficICMP();
+            doc["traffic_pps"]  = _deps.csiService->getTrafficRate();
+            doc["wifi_ip"]      = WiFi.localIP().toString();
             doc["calibrating"] = _deps.csiService->isCalibrating();
             doc["calib_pct"]   = _deps.csiService->getCalibrationProgress();
         } else {
             doc["active"] = false;
+        }
+
+        // Fusion state
+        doc["fusion_enabled"] = _deps.config->fusion_enabled;
+        if (_deps.securityMonitor->isFusionActive()) {
+            JsonObject fusion = doc["fusion"].to<JsonObject>();
+            fusion["presence"]   = _deps.securityMonitor->isFusionPresence();
+            fusion["confidence"] = _deps.securityMonitor->getFusionConfidence();
+            fusion["source"]     = _deps.securityMonitor->getFusionSourceStr();
         }
 
         String resp;
@@ -1408,6 +1515,45 @@ void setupCSIRoutes() {
                 _deps.config->csi_publish_ms = (uint16_t)p;
                 _deps.preferences->putUShort("csi_pubms", (uint16_t)p);
                 if (_deps.csiService) _deps.csiService->setPublishInterval((uint32_t)p);
+                changed = true;
+            }
+        }
+
+        // Traffic generator tuning — port, ICMP mode, PPS
+        if (request->hasParam("traffic_port")) {
+            int p = request->getParam("traffic_port")->value().toInt();
+            if (p >= 1 && p <= 65535) {
+                _deps.preferences->putUShort("csi_tport", (uint16_t)p);
+                if (_deps.csiService) _deps.csiService->setTrafficPort((uint16_t)p);
+                changed = true;
+            }
+        }
+        if (request->hasParam("traffic_icmp")) {
+            bool icmp = request->getParam("traffic_icmp")->value() == "1";
+            _deps.preferences->putBool("csi_ticmp", icmp);
+            if (_deps.csiService) _deps.csiService->setTrafficICMP(icmp);
+            changed = true;
+        }
+        if (request->hasParam("traffic_pps")) {
+            int pps = request->getParam("traffic_pps")->value().toInt();
+            if (pps >= 10 && pps <= 500) {
+                _deps.preferences->putUInt("csi_tpps", (uint32_t)pps);
+                if (_deps.csiService) _deps.csiService->setTrafficRate((uint32_t)pps);
+                changed = true;
+            }
+        }
+
+        // Fusion enable/disable — takes effect immediately (no restart needed)
+        if (request->hasParam("fusion_enabled")) {
+            bool en = request->getParam("fusion_enabled")->value() == "1";
+            if (en != _deps.config->fusion_enabled) {
+                _deps.config->fusion_enabled = en;
+                _deps.preferences->putBool("fus_en", en);
+                if (!en) {
+                    _deps.securityMonitor->setCSISource(nullptr);
+                } else if (_deps.csiService && _deps.csiService->isActive()) {
+                    _deps.securityMonitor->setCSISource(_deps.csiService);
+                }
                 changed = true;
             }
         }

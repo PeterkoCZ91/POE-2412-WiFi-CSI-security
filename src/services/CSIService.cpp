@@ -1,12 +1,21 @@
 #include "services/CSIService.h"
 #include "services/MQTTService.h"
+#include "debug.h"
 #include <WiFi.h>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
 #include "lwip/sockets.h"
-#include "lwip/inet.h"
+#include "lwip/udp.h"
+#include "lwip/raw.h"
+#include "lwip/pbuf.h"
+#include "lwip/netif.h"
+#include "lwip/tcpip.h"
+#include "lwip/icmp.h"
+#include "lwip/inet_chksum.h"
 #include "esp_netif.h"
+#include "esp_netif_net_stack.h"
+#include "esp_wifi.h"
 
 // Breathing bandpass IIR coefficients (HP 0.08Hz + LP 0.6Hz @ ~100Hz)
 static constexpr float BREATH_HP_B0 = 0.99749f;
@@ -21,7 +30,7 @@ static constexpr float LOWPASS_SAMPLE_RATE_HZ = 100.0f;
 
 static const char* TAG = "CSI";
 
-// Minimal DNS query for root domain (type A, 17 bytes)
+// Minimal DNS query for traffic generation (17 bytes)
 static const uint8_t DNS_QUERY[] = {
     0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01
@@ -170,6 +179,24 @@ void CSIService::setTrafficRate(uint32_t pps) {
     }
 }
 
+void CSIService::setTrafficPort(uint16_t port) {
+    if (port == 0) port = 7;
+    _trafficPort = port;
+    if (_trafficGenRunning.load() && !_trafficICMP) {
+        _stopTrafficGen();
+        _startTrafficGen();
+    }
+}
+
+void CSIService::setTrafficICMP(bool icmp) {
+    if (_trafficICMP == icmp) return;
+    _trafficICMP = icmp;
+    if (_trafficGenRunning.load()) {
+        _stopTrafficGen();
+        _startTrafficGen();
+    }
+}
+
 // ============================================================================
 // Traffic Generator (DNS UDP to gateway:53)
 // ============================================================================
@@ -177,49 +204,33 @@ void CSIService::setTrafficRate(uint32_t pps) {
 void CSIService::_startTrafficGen() {
     if (_trafficGenRunning.load()) return;
 
-    // Get gateway IP
-    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    if (!netif) {
-        Serial.println("[CSI] TrafficGen: Failed to get WiFi netif");
-        return;
-    }
+    esp_netif_t* esp_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!esp_netif) { DBG("CSI", "TrafficGen: no WiFi netif"); return; }
 
     esp_netif_ip_info_t ip_info;
-    if (esp_netif_get_ip_info(netif, &ip_info) != ESP_OK || ip_info.gw.addr == 0) {
-        Serial.println("[CSI] TrafficGen: Gateway not available");
+    if (esp_netif_get_ip_info(esp_netif, &ip_info) != ESP_OK || ip_info.ip.addr == 0) {
+        DBG("CSI", "TrafficGen: WiFi has no IP — disabled");
         return;
     }
-
-    _trafficGenSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (_trafficGenSock < 0) {
-        Serial.println("[CSI] TrafficGen: Failed to create socket");
-        return;
-    }
-
-    // Non-blocking for fire-and-forget
-    int flags = fcntl(_trafficGenSock, F_GETFL, 0);
-    fcntl(_trafficGenSock, F_SETFL, flags | O_NONBLOCK);
 
     _trafficGenRunning.store(true);
 
     BaseType_t result = xTaskCreate(
         _trafficGenTask, "csi_traffic", 4096, this, 5, &_trafficGenHandle);
     if (result != pdPASS) {
-        Serial.println("[CSI] TrafficGen: Failed to create task");
-        close(_trafficGenSock);
-        _trafficGenSock = -1;
+        DBG("CSI", "TrafficGen: task create failed");
         _trafficGenRunning.store(false);
         return;
     }
 
-    Serial.printf("[CSI] TrafficGen started (%u pps DNS to gateway)\n", _trafficRatePps);
+    DBG("CSI", "TrafficGen: %u pps via lwIP %s port=%u (WiFi)",
+        _trafficRatePps, _trafficICMP ? "ICMP" : "UDP", _trafficPort);
 }
 
 void CSIService::_stopTrafficGen() {
     if (!_trafficGenRunning.load()) return;
     _trafficGenRunning.store(false);
 
-    // Wait for task to finish
     if (_trafficGenHandle) {
         for (int i = 0; i < 10 && eTaskGetState(_trafficGenHandle) != eDeleted; i++) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -227,60 +238,145 @@ void CSIService::_stopTrafficGen() {
         _trafficGenHandle = nullptr;
     }
 
-    if (_trafficGenSock >= 0) {
-        close(_trafficGenSock);
-        _trafficGenSock = -1;
-    }
+    DBG("CSI", "TrafficGen stopped");
+}
 
-    Serial.println("[CSI] TrafficGen stopped");
+// ICMP echo reply discard callback (we don't need replies, just TX traffic for CSI)
+static uint8_t _icmpRecvCb(void* arg, struct raw_pcb* pcb, struct pbuf* p, const ip_addr_t* addr) {
+    pbuf_free(p);
+    return 1; // consumed
 }
 
 void CSIService::_trafficGenTask(void* arg) {
     CSIService* svc = static_cast<CSIService*>(arg);
     if (!svc) { vTaskDelete(NULL); return; }
 
-    // Get gateway address
-    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    // Get WiFi lwIP netif and target IP
+    esp_netif_t* esp_nif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     esp_netif_ip_info_t ip_info;
-    if (!netif || esp_netif_get_ip_info(netif, &ip_info) != ESP_OK) {
+    if (!esp_nif || esp_netif_get_ip_info(esp_nif, &ip_info) != ESP_OK) {
         svc->_trafficGenRunning.store(false);
         vTaskDelete(NULL);
         return;
     }
 
-    struct sockaddr_in dest_addr = {};
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(53);
-    dest_addr.sin_addr.s_addr = ip_info.gw.addr;
+    // Get raw lwIP netif from esp_netif — this is the key to interface-specific sending
+    struct netif* wifi_netif = (struct netif*)esp_netif_get_netif_impl(esp_nif);
+    if (!wifi_netif) {
+        DBG("CSI", "TrafficGen: failed to get lwIP netif");
+        svc->_trafficGenRunning.store(false);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    uint32_t target_ip = ip_info.gw.addr;
+    if (target_ip == 0) {
+        target_ip = (ip_info.ip.addr & ip_info.netmask.addr) | PP_HTONL(0x00000001UL);
+    }
+
+    ip_addr_t src_addr = {};
+    src_addr.type = IPADDR_TYPE_V4;
+    src_addr.u_addr.ip4.addr = ip_info.ip.addr;
+
+    ip_addr_t dst_addr = {};
+    dst_addr.type = IPADDR_TYPE_V4;
+    dst_addr.u_addr.ip4.addr = target_ip;
+
+    bool useICMP = svc->_trafficICMP;
+    uint16_t port = svc->_trafficPort;
+
+    // Create either UDP PCB or ICMP raw PCB
+    struct udp_pcb* udp_pcb_ptr = nullptr;
+    struct raw_pcb* raw_pcb_ptr = nullptr;
+
+    LOCK_TCPIP_CORE();
+    if (useICMP) {
+        raw_pcb_ptr = raw_new(IP_PROTO_ICMP);
+        if (raw_pcb_ptr) {
+            raw_bind(raw_pcb_ptr, &src_addr);
+            raw_recv(raw_pcb_ptr, _icmpRecvCb, nullptr);
+            raw_bind_netif(raw_pcb_ptr, wifi_netif);
+        }
+    } else {
+        udp_pcb_ptr = udp_new();
+        if (udp_pcb_ptr) {
+            udp_bind(udp_pcb_ptr, &src_addr, 0);
+        }
+    }
+    UNLOCK_TCPIP_CORE();
+
+    if (!udp_pcb_ptr && !raw_pcb_ptr) {
+        DBG("CSI", "TrafficGen: PCB alloc failed (icmp=%d)", useICMP);
+        svc->_trafficGenRunning.store(false);
+        vTaskDelete(NULL);
+        return;
+    }
 
     const uint32_t interval_us = 1000000 / svc->_trafficRatePps;
-    const uint32_t remainder_us = 1000000 % svc->_trafficRatePps;
-    uint32_t accumulator = 0;
     int64_t next_send = esp_timer_get_time();
+    uint16_t icmp_seq = 0;
+
+    DBG("CSI", "TrafficGen task: netif=%c%c dst=" IPSTR " mode=%s port=%u",
+                  wifi_netif->name[0], wifi_netif->name[1],
+                  IP2STR((esp_ip4_addr_t*)&target_ip),
+                  useICMP ? "ICMP" : "UDP", port);
 
     while (svc->_trafficGenRunning.load()) {
-        ssize_t sent = sendto(svc->_trafficGenSock, DNS_QUERY, sizeof(DNS_QUERY),
-                              0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+        err_t err = ERR_OK;
 
-        if (sent <= 0 && errno == 12) { // ENOMEM
-            vTaskDelay(pdMS_TO_TICKS(5));
+        if (useICMP) {
+            // ICMP echo request (ping) — 8 byte header + 4 byte payload
+            struct pbuf* p = pbuf_alloc(PBUF_IP, sizeof(struct icmp_echo_hdr) + 4, PBUF_RAM);
+            if (p) {
+                struct icmp_echo_hdr* echo = (struct icmp_echo_hdr*)p->payload;
+                ICMPH_TYPE_SET(echo, ICMP_ECHO);
+                ICMPH_CODE_SET(echo, 0);
+                echo->id = PP_HTONS(0xC510);
+                echo->seqno = PP_HTONS(icmp_seq++);
+                // 4 bytes payload
+                memset((uint8_t*)p->payload + sizeof(struct icmp_echo_hdr), 0xAA, 4);
+                echo->chksum = 0;
+                echo->chksum = inet_chksum(p->payload, p->tot_len);
+
+                LOCK_TCPIP_CORE();
+                err = raw_sendto_if_src(raw_pcb_ptr, p, &dst_addr, wifi_netif, &src_addr);
+                UNLOCK_TCPIP_CORE();
+                pbuf_free(p);
+            }
+        } else {
+            // UDP mode — send DNS query to configurable port
+            struct pbuf* p = pbuf_alloc(PBUF_TRANSPORT, sizeof(DNS_QUERY), PBUF_RAM);
+            if (p) {
+                memcpy(p->payload, DNS_QUERY, sizeof(DNS_QUERY));
+                LOCK_TCPIP_CORE();
+                err = udp_sendto_if_src(udp_pcb_ptr, p, &dst_addr, port, wifi_netif, &src_addr);
+                UNLOCK_TCPIP_CORE();
+                pbuf_free(p);
+            }
         }
 
-        accumulator += remainder_us;
-        uint32_t extra = accumulator / svc->_trafficRatePps;
-        accumulator %= svc->_trafficRatePps;
+        if (err != ERR_OK) {
+            static uint32_t errCount = 0;
+            if (errCount++ < 5) {
+                DBG("CSI", "TrafficGen: send err=%d (icmp=%d)", err, useICMP);
+            }
+        }
 
-        next_send += interval_us + extra;
+        next_send += interval_us;
         int64_t now = esp_timer_get_time();
         int64_t sleep_us = next_send - now;
 
         if (sleep_us > 0) {
-            TickType_t ticks = pdMS_TO_TICKS((sleep_us + 999) / 1000);
-            if (ticks > 0) vTaskDelay(ticks);
+            vTaskDelay(pdMS_TO_TICKS((sleep_us + 999) / 1000));
         } else if (sleep_us < -100000) {
-            next_send = esp_timer_get_time();
+            next_send = now;
         }
     }
+
+    LOCK_TCPIP_CORE();
+    if (udp_pcb_ptr) udp_remove(udp_pcb_ptr);
+    if (raw_pcb_ptr) raw_remove(raw_pcb_ptr);
+    UNLOCK_TCPIP_CORE();
 
     vTaskDelete(NULL);
 }
@@ -646,7 +742,23 @@ void CSIService::update() {
 
     // Restart traffic gen after WiFi reconnect
     if (!_trafficGenRunning.load() && WiFi.status() == WL_CONNECTED) {
-        _startTrafficGen();
+        static uint32_t lastAttempt = 0;
+        if (millis() - lastAttempt > 5000) {
+            lastAttempt = millis();
+            DBG("CSI", "TrafficGen retry: WiFi=%d IP=%s",
+                WiFi.status(), WiFi.localIP().toString().c_str());
+            _startTrafficGen();
+        }
+    }
+
+    // Periodic CSI diagnostics (every 30s)
+    static uint32_t lastDiag = 0;
+    if (millis() - lastDiag > 30000) {
+        lastDiag = millis();
+        DBG("CSI", "diag: pps=%.1f pkts=%lu tgen=%d wifi=%d ip=%s rssi=%d",
+            _packetRate, (unsigned long)_totalPackets,
+            _trafficGenRunning.load() ? 1 : 0,
+            WiFi.status(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
     }
 
     uint32_t now = millis();

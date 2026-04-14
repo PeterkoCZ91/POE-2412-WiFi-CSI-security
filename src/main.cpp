@@ -43,7 +43,7 @@
 // -------------------------------------------------------------------------
 #ifndef FW_VERSION
 #include <Update.h>
-#define FW_VERSION "v4.2.0-poe-wifi"
+#define FW_VERSION "v4.5.0-poe-wifi"
 #endif
 #define WDT_TIMEOUT_SECONDS 60
 
@@ -222,6 +222,11 @@ struct LastPublished {
     bool tempAlertActive = false;
     unsigned long lastHeapAlert = 0;
     bool heapAlertActive = false;
+
+    // Fusion
+    bool fusion_presence = false;
+    float fusion_confidence = -1.0f;
+    char fusion_source[8] = "";
 };
 static LastPublished lastPub;
 
@@ -607,7 +612,7 @@ void setup() {
             if (preferences.getString("mqtt_id", "") != String(KNOWN_DEVICES[i].id)) {
                 preferences.putString("mqtt_id", KNOWN_DEVICES[i].id);
             }
-            // Hostname: NVS takes priority, KNOWN_DEVICES is just the default on first boot
+            // Hostname: NVS has priority, KNOWN_DEVICES is just default for first boot
             String nvsHostname = preferences.getString("hostname", "");
             if (nvsHostname.isEmpty()) {
                 nvsHostname = KNOWN_DEVICES[i].hostname;
@@ -853,7 +858,7 @@ void setup() {
         bootMsg += "FW: " + String(FW_VERSION) + "\n";
         bootMsg += "IP: " + ETH.localIP().toString() + "\n";
         if (g_prevRestartCause == "eth_link_lost") {
-            bootMsg += "⚠️ *Restart reason: ETH link lost >5min*";
+            bootMsg += "⚠️ *Restart reason: ETH link was lost >5min*";
         } else if (g_prevRestartCause != "none") {
             bootMsg += "ℹ️ Restart: " + g_prevRestartCause;
         }
@@ -870,8 +875,19 @@ void setup() {
         csiService.setHysteresis(configManager.getConfig().csi_hysteresis);
         csiService.setPublishInterval(configManager.getConfig().csi_publish_ms);
 
+        // Traffic generator tuning from NVS
+        if (preferences.isKey("csi_tport")) csiService.setTrafficPort(preferences.getUShort("csi_tport", 7));
+        if (preferences.isKey("csi_ticmp")) csiService.setTrafficICMP(preferences.getBool("csi_ticmp", false));
+        if (preferences.isKey("csi_tpps"))  csiService.setTrafficRate(preferences.getUInt("csi_tpps", 100));
+
         csiService.begin(CSI_WIFI_SSID, CSI_WIFI_PASS, &mqttService,
                          (String(configManager.getConfig().mqtt_id) + "/csi").c_str());
+        if (configManager.getConfig().fusion_enabled) {
+            securityMonitor.setCSISource(&csiService);
+            DBG("CSI", "Fusion enabled — CSI linked to SecurityMonitor");
+        } else {
+            DBG("CSI", "Fusion disabled in config — CSI runs independently");
+        }
     } else {
         Serial.println("[CSI] disabled in NVS — skipping begin()");
     }
@@ -972,7 +988,7 @@ void loop() {
     if (ethLinkRestoredNotify) {
         ethLinkRestoredNotify = false;
         if (telegramBot.isEnabled()) {
-            telegramBot.sendMessage("📶 ETH link restored\n⏱️ Downtime: " + String(ethLinkDownSeconds) + "s");
+            telegramBot.sendMessage("📶 ETH link restored\n⏱️ Outage lasted: " + String(ethLinkDownSeconds) + "s");
         }
     }
 
@@ -996,7 +1012,7 @@ void loop() {
                         DBG("SCHED", "Auto-armed at %s", armTime);
                         systemLog.info("Scheduled arm at " + String(armTime));
                         if (telegramBot.isEnabled()) {
-                            telegramBot.sendMessage("🔒 Auto-arm scheduled (" + String(armTime) + ")");
+                            telegramBot.sendMessage("🔒 Auto-armed (" + String(armTime) + ")");
                         }
                     }
                 }
@@ -1007,7 +1023,7 @@ void loop() {
                         DBG("SCHED", "Auto-disarmed at %s", disarmTime);
                         systemLog.info("Scheduled disarm at " + String(disarmTime));
                         if (telegramBot.isEnabled()) {
-                            telegramBot.sendMessage("🔓 Auto-disarm scheduled (" + String(disarmTime) + ")");
+                            telegramBot.sendMessage("🔓 Auto-disarmed (" + String(disarmTime) + ")");
                         }
                     }
                 }
@@ -1046,7 +1062,7 @@ void loop() {
                 systemLog.info("Auto-arm: no presence " + String(autoArmMin) + "min");
                 eventLog.addEvent(EVT_SECURITY, 0, 0, "Auto-arm (no presence)");
                 if (telegramBot.isEnabled()) {
-                    telegramBot.sendMessage("🔒 Auto-arm: no presence for " + String(autoArmMin) + " min");
+                    telegramBot.sendMessage("🔒 Auto-arm: no movement " + String(autoArmMin) + " min");
                 }
             }
         }
@@ -1087,7 +1103,7 @@ void loop() {
     // Sync Offline Alarm once connected
     if (mqttService.connected() && offlineAlarmOccurred) {
         unsigned long diff = (now - offlineAlarmTime) / 1000;
-        String msg = "⚠️ SYNC: Alarm occurred during network outage! (" + String(diff) + "s)";
+        String msg = "⚠️ SYNC: Alarm occurred during network outage! ( " + String(diff) + "s)";
         notificationService.sendTelegram(msg);
         mqttService.publish("home/security/log", msg.c_str());
         offlineAlarmOccurred = false;
@@ -1098,15 +1114,15 @@ void loop() {
         JsonDocument learnDoc;
         radar.getLearnResultJson(learnDoc);
         String learnMsg = "📡 *Static Learn completed*\n";
-        learnMsg += "Vzorky: " + String(learnDoc["static_samples"].as<int>()) + " / " + String(learnDoc["total_samples"].as<int>()) + "\n";
-        learnMsg += "Statika: " + String(learnDoc["static_freq_pct"].as<int>()) + "%\n";
+        learnMsg += "Samples: " + String(learnDoc["static_samples"].as<int>()) + " / " + String(learnDoc["total_samples"].as<int>()) + "\n";
+        learnMsg += "Static: " + String(learnDoc["static_freq_pct"].as<int>()) + "%\n";
         int topGate = learnDoc["top_gate"] | 0;
         learnMsg += "Top gate: " + String(topGate) + " (~" + String(topGate * 75) + "cm)\n";
         learnMsg += "Confidence: " + String(learnDoc["confidence"].as<int>()) + "%\n";
         if (learnDoc["suggest_ready"] | false) {
-            learnMsg += "✅ Suggested zone: " + String(learnDoc["suggest_min_cm"].as<int>()) + "–" + String(learnDoc["suggest_max_cm"].as<int>()) + "cm (ignore\_static\_only)";
+            learnMsg += "✅ Suggested zone: " + String(learnDoc["suggest_min_cm"].as<int>()) + "–" + String(learnDoc["suggest_max_cm"].as<int>()) + "cm (ignore\\_static\\_only)";
         } else {
-            learnMsg += "⚠️ Insufficient data for zone suggestion.";
+            learnMsg += "⚠️ Not enough data for zone suggestion.";
         }
         notificationService.sendTelegram(learnMsg);
     }
@@ -1228,6 +1244,14 @@ void loop() {
             csi["rssi"]      = csiService.getWifiRSSI();
             csi["calibrating"] = csiService.isCalibrating();
             csi["calib_pct"] = csiService.getCalibrationProgress();
+
+            // Fusion state in SSE telemetry
+            if (securityMonitor.isFusionActive()) {
+                JsonObject fusion = doc["fusion"].to<JsonObject>();
+                fusion["presence"]   = securityMonitor.isFusionPresence();
+                fusion["confidence"] = securityMonitor.getFusionConfidence();
+                fusion["source"]     = securityMonitor.getFusionSourceStr();
+            }
         }
         #endif
 
@@ -1287,6 +1311,28 @@ void loop() {
                 if (mqttService.publish(topics.alarm_state, alarmStr, true)) {
                     strncpy(lastPub.alarm_state, alarmStr, sizeof(lastPub.alarm_state) - 1);
                     lastPub.alarm_state[sizeof(lastPub.alarm_state) - 1] = '\0';
+                }
+            }
+
+            // Fusion presence (on-change)
+            if (securityMonitor.isFusionActive()) {
+                bool fusionPres = securityMonitor.isFusionPresence();
+                if (fusionPres != lastPub.fusion_presence) {
+                    if (mqttService.publish(topics.fusion_presence, fusionPres ? "ON" : "OFF", true))
+                        lastPub.fusion_presence = fusionPres;
+                }
+                const char* fusionSrc = securityMonitor.getFusionSourceStr();
+                if (strcmp(fusionSrc, lastPub.fusion_source) != 0) {
+                    if (mqttService.publish(topics.fusion_source, fusionSrc, true))
+                        strncpy(lastPub.fusion_source, fusionSrc, sizeof(lastPub.fusion_source) - 1);
+                }
+                // Confidence as float string (deadband 0.05)
+                float fusionConf = securityMonitor.getFusionConfidence();
+                if (fabsf(fusionConf - lastPub.fusion_confidence) > 0.05f) {
+                    char confBuf[8];
+                    snprintf(confBuf, sizeof(confBuf), "%.2f", fusionConf);
+                    if (mqttService.publish(topics.fusion_confidence, confBuf, true))
+                        lastPub.fusion_confidence = fusionConf;
                 }
             }
 
@@ -1458,7 +1504,7 @@ void loop() {
                 uint32_t freeHeap = ESP.getFreeHeap();
                 bool heapCooldownOk = (now - lastPub.lastHeapAlert) > COOLDOWN_HEAP_ALERT_MS;
                 if (freeHeap <= HEAP_CRIT_BYTES && heapCooldownOk) {
-                    telegramBot.sendMessage("🔴 *CRITICALLY LOW RAM*\n💾 Free: " + String(freeHeap / 1024) + " KB (limit " + String(HEAP_CRIT_BYTES / 1024) + " KB)\nCrash imminent!");
+                    telegramBot.sendMessage("🔴 *CRITICALLY LOW RAM*\n💾 Free: " + String(freeHeap / 1024) + " KB (limit " + String(HEAP_CRIT_BYTES / 1024) + " KB)\nCrash risk!");
                     lastPub.lastHeapAlert = now;
                     lastPub.heapAlertActive = true;
                 } else if (freeHeap <= HEAP_WARN_BYTES && heapCooldownOk) {

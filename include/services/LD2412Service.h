@@ -173,14 +173,16 @@ private:
     // Gate resolution (cm per gate) — updated by setResolution(), used for gate number in telemetry
     float _gateResolutionCm = 75.0f;
 
-    // Static zone auto-learning
+    // Reflector auto-learning (empty room: captures any persistent reflection)
     bool     _learnActive          = false;
     bool     _learnDone            = false; // flag: learn finished, main loop sends notification
     unsigned long _learnStart      = 0;
     uint16_t _learnDuration        = 0;   // seconds
     uint32_t _learnTotalSamples    = 0;
-    uint32_t _learnStaticSamples   = 0;
+    uint32_t _learnStaticSamples   = 0;   // any detection (moving or static)
     uint32_t _learnGateCount[14]   = {0};
+    uint8_t  _learnMaxEnergy[14]   = {0}; // peak energy per gate for sensitivity suggestion
+    uint8_t  _learnEnergyType[14]  = {0}; // bitmask per gate: bit0=static, bit1=moving
 
     // Motion Vector (smoothing)
     static const int DIST_SAMPLES = 5;

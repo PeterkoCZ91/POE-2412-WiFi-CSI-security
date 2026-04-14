@@ -12,6 +12,7 @@
 // Forward declarations
 class MQTTService;
 class TelegramService;
+class CSIService;
 
 enum class AlarmState {
     DISARMED,
@@ -83,6 +84,13 @@ public:
     bool isBlind() const { return _isBlind; }
     bool isLoitering() const { return _isLoitering; }
     bool isStaticFiltered() const { return _isStaticFiltered; }
+
+    // CSI Fusion — radar+WiFi combined detection
+    void setCSISource(CSIService* csi) { _csiService = csi; }
+    bool isFusionActive() const { return _csiService != nullptr; }
+    bool isFusionPresence() const { return _fusionPresence; }
+    float getFusionConfidence() const { return _fusionConfidence; }
+    const char* getFusionSourceStr() const;
 
     // Configuration
     void setRSSIThreshold(int threshold) { _rssiThreshold = threshold; }
@@ -205,7 +213,7 @@ private:
     uint8_t _petImmunityThreshold = 10;        // Default energy threshold
 
     // Enable/Disable (for empty locations - warehouses, cabins, server rooms)
-    bool _antiMaskEnabled = false;   // DEFAULT: OFF - most locations are sometimes empty
+    bool _antiMaskEnabled = false;   // DEFAULT: OFF - most places are sometimes empty
     bool _loiterAlertEnabled = false; // Disabled - fusion handles alerts
     unsigned long _heartbeatInterval = 14400000; // 4 hodiny default (ne 12h)
 
@@ -276,6 +284,17 @@ private:
     // Siren
     int8_t _sirenPin = -1;
     bool _sirenActive = false;
+
+    // CSI Fusion state
+    CSIService* _csiService = nullptr;
+    bool _fusionPresence = false;           // Combined presence decision
+    float _fusionConfidence = 0.0f;         // 0.0–1.0 confidence level
+    uint8_t _fusionSource = 0;              // Bitmask: bit0=radar, bit1=CSI
+    uint8_t _csiSuppressCount = 0;          // Debounce counter for false-positive suppression
+    unsigned long _csiOnlyStart = 0;        // Timestamp when CSI-only detection began
+    static constexpr uint8_t CSI_SUPPRESS_FRAMES = 6;  // Frames CSI must disagree to suppress radar
+    static constexpr float CSI_ONLY_MIN_SCORE = 0.4f;  // Minimum composite score for CSI-only presence
+    static constexpr unsigned long CSI_ONLY_HOLD_MS = 3000;  // CSI must persist 3s alone before fusion accepts
 
     // Approach tracker — records detections while ARMED for forensic analysis
     static constexpr uint8_t APPROACH_LOG_SIZE = 16;

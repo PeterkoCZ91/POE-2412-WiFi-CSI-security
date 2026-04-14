@@ -96,6 +96,11 @@ void MQTTService::generateTopics() {
     // Multi-sensor mesh
     snprintf(_topics.mesh_verify_request, sizeof(_topics.mesh_verify_request), "security/%s/mesh/verify_request", _deviceId);
     snprintf(_topics.mesh_verify_confirm, sizeof(_topics.mesh_verify_confirm), "security/%s/mesh/verify_confirm", _deviceId);
+
+    // CSI Fusion
+    snprintf(_topics.fusion_presence,   sizeof(_topics.fusion_presence),   "security/%s/fusion/presence", _deviceId);
+    snprintf(_topics.fusion_confidence, sizeof(_topics.fusion_confidence), "security/%s/fusion/confidence", _deviceId);
+    snprintf(_topics.fusion_source,     sizeof(_topics.fusion_source),     "security/%s/fusion/source", _deviceId);
 }
 
 void MQTTService::setupClient() {
@@ -371,7 +376,7 @@ void MQTTService::checkCertificateExpiry() {
     #ifdef MQTTS_ENABLED
     #if MQTTS_ENABLED == 1
 
-    // NTP is already configured in setup() - do not reconfigure here
+    // NTP already configured in setup() - do not reconfigure here
 
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {

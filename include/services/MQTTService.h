@@ -93,6 +93,11 @@ struct MQTTTopics {
     // Multi-sensor mesh
     char mesh_verify_request[64];
     char mesh_verify_confirm[64];
+
+    // CSI Fusion
+    char fusion_presence[64];
+    char fusion_confidence[64];
+    char fusion_source[64];
 };
 
 class MQTTService {

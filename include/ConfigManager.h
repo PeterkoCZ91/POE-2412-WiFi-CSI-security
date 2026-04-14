@@ -40,6 +40,9 @@ struct SystemConfig {
     float    csi_hysteresis    = 0.7f;     // exit-multiplier (0.7 = stay in motion until var < 0.7*thr)
     uint16_t csi_window        = 75;       // sample window size (10–200)
     uint16_t csi_publish_ms    = 1000;     // MQTT publish interval (100–60000 ms)
+
+    // Fusion — combined radar+CSI detection
+    bool     fusion_enabled    = true;     // enable on-device radar+CSI fusion
 };
 
 class ConfigManager {

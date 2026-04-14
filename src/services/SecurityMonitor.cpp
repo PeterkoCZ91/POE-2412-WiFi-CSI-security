@@ -1,6 +1,9 @@
 #include "services/SecurityMonitor.h"
 #include "services/MQTTService.h"
 #include "services/TelegramService.h"
+#ifdef USE_CSI
+#include "services/CSIService.h"
+#endif
 #include "debug.h"
 #include "constants.h"
 
@@ -72,7 +75,7 @@ void SecurityMonitor::update() {
         _alarmState = AlarmState::ARMED;
         DBG("SecMon", "ARMED (exit delay expired)");
         if (_lastDistance > 0) {
-            triggerAlert(NotificationType::ALARM_STATE_CHANGE, "🔒 System ARMED", "⚠️ Presence still detected during arming! Distance: " + String(_lastDistance) + " cm");
+            triggerAlert(NotificationType::ALARM_STATE_CHANGE, "🔒 System ARMED", "⚠️ Presence still detected at activation! Distance: " + String(_lastDistance) + " cm");
         } else {
             triggerAlert(NotificationType::ALARM_STATE_CHANGE, "🔒 System ARMED", "Exit delay completed.");
         }
@@ -99,7 +102,7 @@ void SecurityMonitor::update() {
             _lastDisarmReminder = now;
             triggerAlert(NotificationType::HEALTH_WARNING,
                 "⚠️ System is still DISARMED",
-                "Presence detected but alarm is not armed.\nUse /arm to activate.");
+                "Presence detected, but alarm is not active.\nUse /arm to activate.");
         }
     }
     if (_mutex) xSemaphoreGive(_mutex);
@@ -245,6 +248,16 @@ void SecurityMonitor::checkRadarHealth(bool isConnected) {
     _lastRadarConnected = isConnected;
 }
 
+const char* SecurityMonitor::getFusionSourceStr() const {
+    switch (_fusionSource) {
+        case 0: return "none";
+        case 1: return "radar";
+        case 2: return "csi";
+        case 3: return "both";
+        default: return "none";
+    }
+}
+
 // -------------------------------------------------------------------------
 // Security Pack v2.0 Implementation
 // -------------------------------------------------------------------------
@@ -288,7 +301,7 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
     }
 
     // 2. Anti-Masking (Blind Detection) - CONFIGURABLE
-    // For empty locations (warehouses, cabins, server rooms) silence may be normal
+    // For empty locations (warehouses, cabins, server rooms) silence is normal
     if (move_energy == 0 && static_energy == 0) {
         if (_zeroEnergyStart == 0) _zeroEnergyStart = now;
 
@@ -298,11 +311,11 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
                 _isBlind = true;
                 DBG("SecMon", "Anti-Masking: Silence detected (>%lu min)", _antiMaskThreshold / MS_PER_MINUTE);
 
-                // ONLY send notification if anti-masking is ENABLED
+                // Only send notification if anti-masking is ENABLED
                 if (_antiMaskEnabled) {
                     String msg = "⚠️ ANTI-MASKING: Sensor detects no activity!";
-                    String details = "Possible tampering (sensor covered) or empty room.\n";
-                    details += "Doba ticha: " + String(_antiMaskThreshold / MS_PER_MINUTE) + " min";
+                    String details = "Possible tamper (sensor covered) or empty room.\n";
+                    details += "Silence duration: " + String(_antiMaskThreshold / MS_PER_MINUTE) + " min";
                     triggerAlert(NotificationType::TAMPER_ALERT, msg, details);
                 }
             }
@@ -324,7 +337,7 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
         unsigned long uptimeHours = millis() / MS_PER_HOUR;
         unsigned long uptimeDays = uptimeHours / 24;
 
-        String msg = "🟢 Heartbeat: ONLINE & GUARDING";
+        String msg = "🟢 Heartbeat: ONLINE & MONITORING";
         String details = "Uptime: ";
         if (uptimeDays > 0) {
             details += String(uptimeDays) + "d " + String(uptimeHours % 24) + "h";
@@ -332,12 +345,12 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
             details += String(uptimeHours) + "h";
         }
         details += "\nETH: " + String(ETH.linkUp() ? "UP" : "DOWN");  // ETH — no RSSI
-        details += "\nState: " + String(_isBlind ? "Silent (no activity)" : "Active");
+        details += "\nStav: " + String(_isBlind ? "Silence (no activity)" : "Active");
 
         triggerAlert(NotificationType::HEALTH_WARNING, msg, details);
     }
 
-    // 4. Loitering Detection - CONFIGURABLE
+    // 4. Loitering - CONFIGURABLE
     // Someone is close (< 2m) and staying for configurable time
     if (distance > 0 && distance < 200) {
         if (_loiterStart == 0) _loiterStart = now;
@@ -399,7 +412,7 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
                  // Zone alerts are informational, use HEALTH_WARNING for high-level zones too
                  NotificationType nt = NotificationType::PRESENCE_DETECTED;
                  if (z.alert_level >= 2) nt = NotificationType::HEALTH_WARNING;
-                 String msg = "Zone entered: " + String(z.name);
+                 String msg = "Zone entry: " + String(z.name);
                  String details = "Distance: " + String(distance) + " cm";
                  triggerAlert(nt, msg, details);
              }
@@ -407,12 +420,94 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
     }
 
     // 4a2. Static reflector filter — independent of armed state
-    // If detection is in zone behavior==3 and pure static energy → always filter
+    // If detection in zone behavior==3 and purely static energy → always filter
     if (_currentZoneIndex >= 0 && (size_t)_currentZoneIndex < _zones.size() &&
         _zones[_currentZoneIndex].alarm_behavior == 3 &&
         move_energy < _alarmEnergyThreshold && distance > 0) {
         _isStaticFiltered = true;
         DBG("SecMon", "Static-filtered zone '%s' (move=%d < thr=%d)", _currentZoneName.c_str(), move_energy, _alarmEnergyThreshold);
+    }
+
+    // ---- CSI Fusion: combined radar+WiFi presence decision ----
+    // Must run BEFORE alarm logic so fusion can gate alarm transitions
+#ifdef USE_CSI
+    if (_csiService) {
+        bool radarSees = (distance > 0 && (move_energy > 0 || static_energy > 0)) && !_isStaticFiltered;
+        bool csiSees = _csiService->getMotionState();
+        float csiScore = _csiService->getCompositeScore();
+        float csiBreathing = _csiService->getBreathingScore();
+
+        // Source bitmask: bit0=radar, bit1=CSI
+        _fusionSource = (radarSees ? 1 : 0) | (csiSees ? 2 : 0);
+
+        if (radarSees && csiSees) {
+            // BOTH agree — high confidence
+            _fusionPresence = true;
+            _fusionConfidence = 0.9f + 0.1f * min(csiScore, 1.0f);
+            _csiSuppressCount = 0;
+            _csiOnlyStart = 0;
+        } else if (radarSees && !csiSees) {
+            // Radar only, CSI disagrees — possible false positive (fan, curtain)
+            // Suppress after N consecutive frames of CSI disagreement
+            if (_csiSuppressCount < 255) _csiSuppressCount++;
+            if (_csiSuppressCount >= CSI_SUPPRESS_FRAMES) {
+                _fusionPresence = false;
+                _fusionConfidence = 0.2f;
+                if (_csiSuppressCount == CSI_SUPPRESS_FRAMES || _csiSuppressCount % 200 == 0)
+                    DBG("SecMon", "FUSION: radar suppressed (CSI disagrees %d frames)", _csiSuppressCount);
+            } else {
+                // Trust radar during debounce window
+                _fusionPresence = true;
+                _fusionConfidence = 0.5f;
+            }
+        } else if (!radarSees && csiSees) {
+            // CSI only — person sitting, behind obstacle, or radar lost target
+            // Guard against false positives: require minimum score + time persistence
+            _csiSuppressCount = 0;
+
+            if (csiScore < CSI_ONLY_MIN_SCORE) {
+                // Score too low — likely interference, not a person
+                _fusionPresence = false;
+                _fusionConfidence = 0.1f;
+                _csiOnlyStart = 0;
+                DBG("SecMon", "FUSION: CSI-only rejected (score=%.2f < %.2f)", csiScore, CSI_ONLY_MIN_SCORE);
+            } else {
+                // Score OK — but require sustained detection before accepting
+                if (_csiOnlyStart == 0) _csiOnlyStart = now;
+                unsigned long csiOnlyDuration = now - _csiOnlyStart;
+
+                if (csiOnlyDuration >= CSI_ONLY_HOLD_MS) {
+                    // Persistent CSI detection — accept as presence
+                    _fusionPresence = true;
+                    _fusionConfidence = 0.4f + 0.3f * min(csiScore, 1.0f);
+                    if (csiBreathing > 0.1f) {
+                        _fusionConfidence += 0.2f;
+                    }
+                    _fusionConfidence = min(_fusionConfidence, 1.0f);
+                    DBG("SecMon", "FUSION: CSI hold (score=%.2f breath=%.3f conf=%.2f dur=%lums)",
+                        csiScore, csiBreathing, _fusionConfidence, csiOnlyDuration);
+                } else {
+                    // Still in debounce window — report as uncertain
+                    _fusionPresence = false;
+                    _fusionConfidence = 0.2f;
+                    DBG("SecMon", "FUSION: CSI-only debounce (%lums / %lums)", csiOnlyDuration, CSI_ONLY_HOLD_MS);
+                }
+            }
+        } else {
+            // Neither sees anything — clear
+            _fusionPresence = false;
+            _fusionConfidence = 0.0f;
+            _csiSuppressCount = 0;
+            _csiOnlyStart = 0;
+        }
+    } else
+#endif
+    {
+        // No CSI — fallback to radar-only presence
+        bool radarSees = (distance > 0 && (move_energy > 0 || static_energy > 0)) && !_isStaticFiltered;
+        _fusionPresence = radarSees;
+        _fusionConfidence = radarSees ? 0.7f : 0.0f;
+        _fusionSource = radarSees ? 1 : 0;
     }
 
     // 4b. Approach logging — record every detection while ARMED (forensic trail)
@@ -421,10 +516,15 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
         logApproach(distance, move_energy, static_energy);
     }
 
-    // 4c. Armed state: entry delay / triggered logic (uses current zone from above)
+    // 4c. Armed state: entry delay / triggered logic
+    // Uses fusion result: radar FP (CSI disagrees) won't trigger alarm,
+    // CSI-only presence (radar blind) CAN trigger alarm via entry delay.
     // FIX #4: Debounce — require N consecutive qualifying frames before transition
-    bool armedQualifies = (_alarmState == AlarmState::ARMED && distance > 0 &&
+    bool radarQualifies = (distance > 0 &&
         (move_energy >= _alarmEnergyThreshold || static_energy >= _alarmEnergyThreshold));
+    bool csiOnlyQualifies = (!radarQualifies && _fusionPresence && _fusionSource == 2);
+    bool armedQualifies = (_alarmState == AlarmState::ARMED &&
+        _fusionPresence && (radarQualifies || csiOnlyQualifies));
 
     if (armedQualifies) {
         _armedDebounceCount++;
@@ -451,58 +551,68 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
             }
         }
 
+        // CSI-only detection: no zone info, always use entry delay
+        if (csiOnlyQualifies) {
+            behavior = 0;
+            DBG("SecMon", "CSI-only alarm trigger (conf=%.2f, no radar distance)", _fusionConfidence);
+        }
+
+        const char* motionType = csiOnlyQualifies ? "csi" : motionTypeStr(move_energy, static_energy);
+        const char* zoneName = csiOnlyQualifies ? "csi_only" : _currentZoneName.c_str();
+        uint16_t evtDistance = csiOnlyQualifies ? 0 : distance;
+
         if (behavior == 2) {
             DBG("SecMon", "Detection in ignore-zone '%s', skipping alarm", _currentZoneName.c_str());
         } else if (behavior == 3) {
-            // ignore_static_only: fixed reflectors (e.g. metal ladder) produce static-only without motion
+            // ignore_static_only: fixed reflectors (e.g. metal ladder) generate only static without movement
             if (move_energy < _alarmEnergyThreshold) {
                 // _isStaticFiltered already set above
                 DBG("SecMon", "Static-only in zone '%s' (move=%d < thr=%d), skip",
                     _currentZoneName.c_str(), move_energy, _alarmEnergyThreshold);
             } else {
-                // Motion present → entry delay (real intruder)
+                // Movement present → entry delay (real intruder)
                 _alarmState = AlarmState::PENDING;
                 _entryDelayStart = now;
                 strncpy(_pendingEvent.reason, "entry_delay", sizeof(_pendingEvent.reason) - 1);
-                strncpy(_pendingEvent.zone, _currentZoneName.c_str(), sizeof(_pendingEvent.zone) - 1);
-                _pendingEvent.distance_cm = distance; _pendingEvent.energy_mov = move_energy; _pendingEvent.energy_stat = static_energy;
-                strncpy(_pendingEvent.motion_type, motionTypeStr(move_energy, static_energy), sizeof(_pendingEvent.motion_type) - 1);
+                strncpy(_pendingEvent.zone, zoneName, sizeof(_pendingEvent.zone) - 1);
+                _pendingEvent.distance_cm = evtDistance; _pendingEvent.energy_mov = move_energy; _pendingEvent.energy_stat = static_energy;
+                strncpy(_pendingEvent.motion_type, motionType, sizeof(_pendingEvent.motion_type) - 1);
                 _pendingEvent.uptime_s = now / 1000; fillISOTime(_pendingEvent.iso_time, sizeof(_pendingEvent.iso_time));
                 enqueueAlarmEvent();
                 DBG("SecMon", "PENDING — move in static-filter zone '%s'", _currentZoneName.c_str());
                 triggerAlert(NotificationType::ENTRY_DETECTED, "⏳ ENTRY DETECTED!",
-                    "Entry delay: " + String(_entryDelay / 1000) + "s\nZona: " + _currentZoneName + "\n" + formatApproachLog(), distance);
+                    "Entry delay: " + String(_entryDelay / 1000) + "s\nZone: " + _currentZoneName + "\n" + formatApproachLog(), distance);
             }
         } else if (behavior == 1) {
             _alarmState = AlarmState::TRIGGERED;
             _triggerStartTime = now;
             strncpy(_pendingEvent.reason, "immediate", sizeof(_pendingEvent.reason) - 1);
-            strncpy(_pendingEvent.zone, _currentZoneName.c_str(), sizeof(_pendingEvent.zone) - 1);
-            _pendingEvent.distance_cm = distance; _pendingEvent.energy_mov = move_energy; _pendingEvent.energy_stat = static_energy;
-            strncpy(_pendingEvent.motion_type, motionTypeStr(move_energy, static_energy), sizeof(_pendingEvent.motion_type) - 1);
+            strncpy(_pendingEvent.zone, zoneName, sizeof(_pendingEvent.zone) - 1);
+            _pendingEvent.distance_cm = evtDistance; _pendingEvent.energy_mov = move_energy; _pendingEvent.energy_stat = static_energy;
+            strncpy(_pendingEvent.motion_type, motionType, sizeof(_pendingEvent.motion_type) - 1);
             _pendingEvent.uptime_s = now / 1000; fillISOTime(_pendingEvent.iso_time, sizeof(_pendingEvent.iso_time));
             enqueueAlarmEvent();
-            DBG("SecMon", "IMMEDIATE TRIGGER in zone '%s'!", _currentZoneName.c_str());
-            triggerAlert(NotificationType::ALARM_TRIGGERED, "🚨 ALARM TRIGGERED!", "Immediate trigger in zone: " + _currentZoneName + "\n" + formatApproachLog(), distance);
+            DBG("SecMon", "IMMEDIATE TRIGGER in zone '%s'!", zoneName);
+            triggerAlert(NotificationType::ALARM_TRIGGERED, "🚨 ALARM TRIGGERED!", "Immediate trigger in zone: " + String(zoneName) + "\n" + formatApproachLog(), evtDistance);
             activateSiren();
         } else {
             _alarmState = AlarmState::PENDING;
             _entryDelayStart = now;
             strncpy(_pendingEvent.reason, "entry_delay", sizeof(_pendingEvent.reason) - 1);
-            strncpy(_pendingEvent.zone, _currentZoneName.c_str(), sizeof(_pendingEvent.zone) - 1);
-            _pendingEvent.distance_cm = distance; _pendingEvent.energy_mov = move_energy; _pendingEvent.energy_stat = static_energy;
-            strncpy(_pendingEvent.motion_type, motionTypeStr(move_energy, static_energy), sizeof(_pendingEvent.motion_type) - 1);
+            strncpy(_pendingEvent.zone, zoneName, sizeof(_pendingEvent.zone) - 1);
+            _pendingEvent.distance_cm = evtDistance; _pendingEvent.energy_mov = move_energy; _pendingEvent.energy_stat = static_energy;
+            strncpy(_pendingEvent.motion_type, motionType, sizeof(_pendingEvent.motion_type) - 1);
             _pendingEvent.uptime_s = now / 1000; fillISOTime(_pendingEvent.iso_time, sizeof(_pendingEvent.iso_time));
             enqueueAlarmEvent();
-            DBG("SecMon", "PENDING (entry delay %lu s)", _entryDelay / 1000);
-            triggerAlert(NotificationType::ENTRY_DETECTED, "⏳ ENTRY DETECTED!", "Entry delay: " + String(_entryDelay / 1000) + "s\n" + formatApproachLog() + "Use /disarm to deactivate.", distance);
+            DBG("SecMon", "PENDING (entry delay %lu s, source=%s)", _entryDelay / 1000, getFusionSourceStr());
+            triggerAlert(NotificationType::ENTRY_DETECTED, "⏳ ENTRY DETECTED!", "Entry delay: " + String(_entryDelay / 1000) + "s\nSource: " + String(getFusionSourceStr()) + "\n" + formatApproachLog() + "Use /disarm to deactivate.", evtDistance);
         }
     }
     else if (_alarmState == AlarmState::PENDING && now - _entryDelayStart >= _entryDelay) {
         _alarmState = AlarmState::TRIGGERED;
         _triggerStartTime = now;
         strncpy(_pendingEvent.reason, "entry_delay_expired", sizeof(_pendingEvent.reason) - 1);
-        // zone/distance/energy from last PENDING event preserved — add uptime
+        // zone/distance/energy from last PENDING event preserved — update uptime
         _pendingEvent.uptime_s = now / 1000; fillISOTime(_pendingEvent.iso_time, sizeof(_pendingEvent.iso_time));
         enqueueAlarmEvent();
         DBG("SecMon", "ALARM TRIGGERED!");
@@ -510,8 +620,8 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
         activateSiren();
     }
 
-    // Track sustained presence while disarmed (for reminder)
-    if (_alarmState == AlarmState::DISARMED && distance > 0 && (move_energy > 0 || static_energy > 0)) {
+    // Track sustained presence while disarmed (for reminder) — use fusion result
+    if (_alarmState == AlarmState::DISARMED && _fusionPresence) {
         if (_presenceWhileDisarmedStart == 0) {
             _presenceWhileDisarmedStart = now;
         } else if (now - _presenceWhileDisarmedStart > 10000) {
@@ -673,7 +783,7 @@ void SecurityMonitor::clearApproachLog() {
 String SecurityMonitor::formatApproachLog() const {
     if (_approachCount == 0) return "No data";
 
-    String result = "📍 Approach log (" + String(_approachCount) + " entries):\n";
+    String result = "📍 Approach (" + String(_approachCount) + " entries):\n";
     uint32_t firstTs = _approachLog[_approachHead].timestamp_s;
     bool isEpoch = firstTs > 1700000000;
 

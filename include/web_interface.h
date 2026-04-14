@@ -3,7 +3,7 @@
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML>
-<html lang="cs">
+<html lang="en">
 <head>
   <title>LD2412 Security</title>
   <meta charset="UTF-8">
@@ -60,7 +60,12 @@ const char index_html[] PROGMEM = R"rawliteral(
     .section-title { color:#888; font-size:0.8rem; margin:15px 0 5px 0; text-transform:uppercase; border-bottom:1px solid #333; }
     
     #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-    
+
+    /* Timeline scroll */
+    #evt_timeline_list::-webkit-scrollbar { width: 6px; }
+    #evt_timeline_list::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    #evt_timeline_list::-webkit-scrollbar-track { background: #111; }
+
     /* Mobile Responsive */
     @media (max-width: 480px) {
         .grid { grid-template-columns: 1fr; gap: 8px; }
@@ -87,7 +92,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   </h2>
 
   <div id="security_warning" style="background:#cf6679; color:black; padding:10px; border-radius:8px; margin-bottom:10px; display:none; text-align:center; font-weight:bold;">
-    ⚠️ Default password admin/admin — change in Network &amp; Cloud section
+    ⚠️ Default password admin/admin — change in Network &amp; Cloud
   </div>
 
   <div class="grid">
@@ -104,12 +109,12 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div style="display:flex; gap:10px">
             <div style="flex:1; text-align:center">
                 <div style="color:#03dac6; font-weight:bold" id="mov_val">0%</div>
-                <div class="unit">POHYB</div>
+                <div class="unit">MOVEMENT</div>
                 <svg class="spark" id="graph_mov" style="height:30px; stroke:#03dac6"></svg>
             </div>
             <div style="flex:1; text-align:center">
                 <div style="color:#bb86fc; font-weight:bold" id="stat_val">0%</div>
-                <div class="unit">STATIKA</div>
+                <div class="unit">STATIC</div>
                 <svg class="spark" id="graph_stat" style="height:30px; stroke:#bb86fc"></svg>
             </div>
         </div>
@@ -117,17 +122,17 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <!-- HEALTH & STATS -->
     <div class="card">
-        <div class="stat-row"><span>Sensor health</span><span id="h_score" class="stat-val">---%</span></div>
-        <div class="stat-row"><span>UART Stav</span><span id="h_uart">---</span></div>
-        <div class="stat-row"><span>Frame rate</span><span id="h_fps">--- FPS</span></div>
-        <div class="stat-row"><span>Chyby komunikace</span><span id="h_err" style="color:var(--warn)">0</span></div>
+        <div class="stat-row"><span>Sensor Health</span><span id="h_score" class="stat-val">---%</span></div>
+        <div class="stat-row"><span>UART State</span><span id="h_uart">---</span></div>
+        <div class="stat-row"><span>Frame Rate</span><span id="h_fps">--- FPS</span></div>
+        <div class="stat-row"><span>Communication Errors</span><span id="h_err" style="color:var(--warn)">0</span></div>
         <div class="stat-row"><span>RAM (Free/Min)</span><span id="h_heap">--- / --- KB</span></div>
-        <div class="stat-row"><span>Chip temperature</span><span id="h_temp">--- °C</span></div>
+        <div class="stat-row"><span>Chip Temperature</span><span id="h_temp">--- °C</span></div>
         <div class="stat-row"><span>Uptime</span><span id="h_uptime">---</span></div>
         <div style="display:flex; gap:5px; margin-top:10px; flex-wrap: wrap;">
-            <button class="sec" style="flex:1; min-width:80px;" onclick="api('radar/restart', {method:'POST'})">Restart radaru</button>
-            <button class="sec" style="flex:1; min-width:80px;" onclick="if(confirm('Restartovat ESP?')) api('restart', {method:'POST'})">Restart ESP</button>
-            <button class="warn" style="flex:1; min-width:80px;" onclick="if(confirm('Really factory reset the radar?')) api('radar/factory_reset', {method:'POST'})">Reset MW</button>
+            <button class="sec" style="flex:1; min-width:80px;" onclick="api('radar/restart', {method:'POST'})">Restart Radar</button>
+            <button class="sec" style="flex:1; min-width:80px;" onclick="if(confirm('Restart ESP?')) api('restart', {method:'POST'})">Restart ESP</button>
+            <button class="warn" style="flex:1; min-width:80px;" onclick="if(confirm('Really perform radar factory reset?')) api('radar/factory_reset', {method:'POST'})">Reset MW</button>
         </div>
     </div>
 
@@ -136,39 +141,39 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div class="tabs">
             <div class="tab active" onclick="tab(0)">Basic</div>
             <div class="tab" onclick="tab(1)">Security</div>
-            <div class="tab" onclick="tab(2)">Hradla</div>
+            <div class="tab" onclick="tab(2)">Gates</div>
             <div class="tab" onclick="tab(3)">Network & Cloud</div>
             <div class="tab" onclick="tab(4)">Zones</div>
-            <div class="tab" onclick="tab(5)">Historie</div>
+            <div class="tab" onclick="tab(5)">History</div>
             <div class="tab" onclick="tab(6)">WiFi CSI</div>
         </div>
 
         <!-- TAB 0: BASIC -->
         <div id="tab0">
-            <div class="stat-row"><span>Device name (mDNS)</span></div>
+            <div class="stat-row"><span>Device Name (mDNS)</span></div>
             <div style="display:flex; gap:5px; margin-bottom:10px">
-                <input type="text" id="txt_hostname" placeholder="e.g. sensor-livingroom">
+                <input type="text" id="txt_hostname" placeholder="e.g. sensor-room1">
                 <button class="sec" style="width:auto; margin:0" onclick="saveHostname()">OK</button>
             </div>
 
             <div class="row-input">
-                <span style="flex:1">Min Dosah (Gate)</span>
+                <span style="flex:1">Min Range (Gate)</span>
                 <input type="number" id="i_min" min="0" max="13" style="width:60px" onchange="saveBasic()">
             </div>
             <div class="row-input">
-                <span style="flex:1">Max Dosah (Gate)</span>
+                <span style="flex:1">Max Range (Gate)</span>
                 <input type="number" id="i_max" min="1" max="13" style="width:60px" onchange="saveBasic()">
             </div>
             
-            <div class="stat-row" style="margin-top:10px"><span>Hold time (ms)</span></div>
+            <div class="stat-row" style="margin-top:10px"><span>Hold Time (ms)</span></div>
             <input type="number" id="i_hold" step="1000" onchange="saveBasic()">
             
-            <div class="stat-row" style="margin-top:10px"><span>Citlivost Movement (%)</span></div>
+            <div class="stat-row" style="margin-top:10px"><span>Movement Sensitivity (%)</span></div>
             <input type="number" id="i_sens" min="0" max="100" onchange="saveBasic()">
 
             <div style="display:flex; align-items:center; gap:8px; margin-top:15px; margin-bottom:5px">
                 <input type="checkbox" id="chk_led" style="width:auto" onchange="saveBasic()">
-                <label for="chk_led">Povolit LED (Indikace)</label>
+                <label for="chk_led">Enable LED (Indicator)</label>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px">
                 <input type="checkbox" id="chk_eng" style="width:auto" onchange="toggleEng()">
@@ -180,36 +185,36 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         <!-- TAB 1: SECURITY -->
         <div id="tab1" class="hidden">
-            <div class="section-title">ANTI-MASKING (Tamper by covering)</div>
+            <div class="section-title">ANTI-MASKING (Tamper by Covering)</div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px">
                 <input type="checkbox" id="chk_am_en" style="width:auto" onchange="saveSec()">
-                <label for="chk_am_en">Enable alarm on silence</label>
+                <label for="chk_am_en">Enable silence alarm</label>
             </div>
             <div class="row-input">
                 <span>Timeout (sec)</span>
                 <input type="number" id="i_am" placeholder="300" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                ⚠️ For warehouses, cabins, server rooms <b>DISABLE</b> - silence is normal there.<br>
-                For occupied spaces ENABLE - detects sensor covering.
+                ⚠️ For warehouses, cabins, server rooms <b>DISABLE</b> — silence is normal there.<br>
+                For occupied spaces ENABLE — detects sensor covering.
             </p>
 
-            <div class="section-title">LOITERING (Suspicious lingering)</div>
+            <div class="section-title">LOITERING (Suspicious Lingering)</div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px">
                 <input type="checkbox" id="chk_loit_en" style="width:auto" onchange="saveSec()">
-                <label for="chk_loit_en">Notify on lingering</label>
+                <label for="chk_loit_en">Loitering notification</label>
             </div>
             <div class="row-input">
                 <span>Timeout (sec)</span>
                 <input type="number" id="i_loit" placeholder="15" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                Alert when someone lingers &lt;2m from sensor longer than timeout.
+                Alarm when someone stands &lt;2m from sensor longer than timeout.
             </p>
 
-            <div class="section-title">HEARTBEAT (Periodic report)</div>
+            <div class="section-title">HEARTBEAT (Periodic Report)</div>
             <div class="row-input">
-                <span>Interval (hodiny)</span>
+                <span>Interval (hours)</span>
                 <input type="number" id="i_hb" placeholder="4" min="0" max="24" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
@@ -218,7 +223,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
             <div class="section-title">PET IMMUNITY</div>
             <div class="row-input">
-                <span>Min. energie pohybu</span>
+                <span>Min. movement energy</span>
                 <input type="number" id="i_pet" placeholder="10" min="0" max="50" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0">
@@ -227,11 +232,11 @@ const char index_html[] PROGMEM = R"rawliteral(
 
             <div class="section-title">ALARM DELAY</div>
             <div class="row-input">
-                <span>Entry delay (sec)</span>
+                <span>Entry Delay (sec)</span>
                 <input type="number" id="i_entry_dl" placeholder="30" min="0" max="300" style="width:80px" onchange="saveAlarmConfig()">
             </div>
             <div class="row-input">
-                <span>Exit delay (sec)</span>
+                <span>Exit Delay (sec)</span>
                 <input type="number" id="i_exit_dl" placeholder="30" min="0" max="300" style="width:80px" onchange="saveAlarmConfig()">
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px">
@@ -245,24 +250,24 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <input type="number" id="i_timeout" placeholder="10" min="0" max="255" style="width:80px" onchange="saveTimeout()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                Time after which radar reports "absence" without detection.
+                Duration after which radar reports "no presence" without detection.
             </p>
 
             <div class="section-title">LIGHT SENSOR (OUT pin)</div>
             <div class="row-input">
-                <span>Light function</span>
+                <span>Light Function</span>
                 <select id="sel_light_func" style="width:140px" onchange="saveLightConfig()">
-                    <option value="0">Vypnuto</option>
+                    <option value="0">Disabled</option>
                     <option value="1">Night mode (below threshold)</option>
                     <option value="2">Day mode (above threshold)</option>
                 </select>
             </div>
             <div class="row-input">
-                <span>Light threshold (0-255)</span>
+                <span>Light Threshold (0-255)</span>
                 <input type="number" id="i_light_thresh" placeholder="128" min="0" max="255" style="width:80px" onchange="saveLightConfig()">
             </div>
             <div class="row-input">
-                <span>Current light</span>
+                <span>Current Light</span>
                 <span id="cur_light_val" style="font-weight:bold">---</span>
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 0 0">
@@ -310,32 +315,32 @@ const char index_html[] PROGMEM = R"rawliteral(
             <div class="section-title">MQTT Broker</div>
             <div style="display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" id="chk_mqtt_en" style="width:auto">
-                <label for="chk_mqtt_en">Povolit MQTT</label>
+                <label for="chk_mqtt_en">Enable MQTT</label>
             </div>
-            <input type="text" id="txt_mqtt_server" placeholder="IP serveru">
+            <input type="text" id="txt_mqtt_server" placeholder="Server IP">
             <div style="display:flex; gap:5px">
                 <input type="text" id="txt_mqtt_port" placeholder="Port (1883)">
                 <input type="text" id="txt_mqtt_user" placeholder="Username">
             </div>
-            <input type="password" id="txt_mqtt_pass" placeholder="Heslo">
+            <input type="password" id="txt_mqtt_pass" placeholder="Password">
             <button onclick="saveMQTTConfig()" class="sec">Save MQTT</button>
 
-            <div class="section-title">Telegram Notifikace</div>
+            <div class="section-title">Telegram Notifications</div>
             <div style="display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" id="chk_tg_en" style="width:auto">
-                <label for="chk_tg_en">Povolit Bot</label>
+                <label for="chk_tg_en">Enable Bot</label>
             </div>
-            <input type="text" id="txt_tg_token" placeholder="Token bota">
-            <input type="text" id="txt_tg_chat" placeholder="ID chatu">
+            <input type="text" id="txt_tg_token" placeholder="Bot Token">
+            <input type="text" id="txt_tg_chat" placeholder="Chat ID">
             <div style="display:flex; gap:5px">
                 <button onclick="saveTelegram()" class="sec">Save</button>
-                <button onclick="testTelegram()" class="sec">Otestovat</button>
+                <button onclick="testTelegram()" class="sec">Test</button>
             </div>
             <div class="section-title">ACCESS CREDENTIALS</div>
             <input type="text" id="txt_auth_user" placeholder="Username">
-            <input type="password" id="txt_auth_pass" placeholder="New password">
-            <input type="password" id="txt_auth_pass2" placeholder="Heslo znovu">
-            <button onclick="saveAuth()" class="warn">Change password</button>
+            <input type="password" id="txt_auth_pass" placeholder="New Password">
+            <input type="password" id="txt_auth_pass2" placeholder="Confirm Password">
+            <button onclick="saveAuth()" class="warn">Change Password</button>
         </div>
 
         <!-- TAB 4: ZONES -->
@@ -359,57 +364,79 @@ const char index_html[] PROGMEM = R"rawliteral(
                         <option value="600">10 min</option>
                         <option value="1800">30 min</option>
                         <option value="3600">60 min</option>
-                        <option value="14400">4 hod</option>
-                        <option value="28800">8 hod</option>
+                        <option value="14400">4 hrs</option>
+                        <option value="28800">8 hrs</option>
                     </select>
-                    <button onclick="startLearn()" id="btn_learn" class="sec" style="flex:1">📡 Learn static</button>
+                    <button onclick="startLearn()" id="btn_learn" class="sec" style="flex:1">📡 Learn Static</button>
                 </div>
                 <div id="learn_status" style="margin-top:6px; font-size:0.8rem; color:#888; display:none"></div>
             </div>
         </div>
 
-        <!-- TAB 5: EVENTS -->
+        <!-- TAB 5: EVENT TIMELINE -->
         <div id="tab5" class="hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
-                <div class="section-title" style="margin:0; border:none">RECENT EVENTS</div>
-                <button onclick="clearEvents()" class="warn" style="width:auto; padding:5px 10px; margin:0">Smazat historii</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px">
+                <div class="section-title" style="margin:0; border:none">EVENT TIMELINE</div>
+                <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap">
+                    <span id="evt_total" style="font-size:0.75rem; color:#666"></span>
+                    <select id="evt_filter" onchange="loadEvents()" style="width:auto; padding:4px 8px; font-size:0.8rem">
+                        <option value="-1">All</option>
+                        <option value="5">Alarm</option>
+                        <option value="1">Movement</option>
+                        <option value="2">Tamper</option>
+                        <option value="4">Heartbeat</option>
+                        <option value="0">System</option>
+                        <option value="3">Network</option>
+                    </select>
+                    <button onclick="exportEvents()" class="sec" style="width:auto; padding:4px 8px; margin:0; font-size:0.8rem">CSV</button>
+                    <button onclick="clearEvents()" class="warn" style="width:auto; padding:4px 8px; margin:0; font-size:0.8rem">Delete</button>
+                </div>
             </div>
-            <div style="overflow-x:auto">
-                <table style="width:100%; border-collapse:collapse; font-size:0.8rem; text-align:left">
-                    <thead>
-                        <tr style="border-bottom:1px solid #444; color:#888">
-                            <th style="padding:5px">Time</th>
-                            <th style="padding:5px">Typ</th>
-                            <th style="padding:5px">Message</th>
-                            <th style="padding:5px">Dist.</th>
-                        </tr>
-                    </thead>
-                    <tbody id="event_list"></tbody>
-                </table>
+            <!-- Timeline visual bar (last 24h density) -->
+            <svg id="evt_timeline" viewBox="0 0 288 32" preserveAspectRatio="none"
+                 style="width:100%; height:32px; background:#111; border-radius:4px; margin-bottom:8px">
+            </svg>
+            <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#555; margin:-4px 0 8px 0">
+                <span>-24h</span><span>-12h</span><span>now</span>
             </div>
+            <!-- Event list -->
+            <div id="evt_timeline_list" style="max-height:400px; overflow-y:auto"></div>
+            <button id="evt_load_more" onclick="loadMoreEvents()" class="sec" style="display:none; margin-top:8px; font-size:0.85rem">Load more...</button>
         </div>
 
         <!-- TAB 6: WIFI CSI -->
         <div id="tab6" class="hidden">
             <div id="csi_compiled_warn" style="display:none; padding:10px; background:#3a1010; border-left:3px solid var(--warn); margin-bottom:12px; font-size:0.85rem">
-                ⚠️ This firmware was not compiled with WiFi CSI support (missing <code>-D USE_CSI=1</code>). To enable, flash the <b>esp32_poe_csi</b> variant.
+                ⚠️ This firmware was not compiled with WiFi CSI support (missing <code>-D USE_CSI=1</code>). To enable, upload the <b>esp32_poe_csi</b> variant.
             </div>
 
-            <div class="section-title">STAV CSI</div>
+            <div class="section-title">CSI STATUS</div>
             <div class="stat-row"><span>Active</span><span id="csi_active_val" style="font-weight:bold">—</span></div>
             <div class="stat-row"><span>WiFi SSID</span><span id="csi_ssid_val">—</span></div>
             <div class="stat-row"><span>WiFi RSSI</span><span id="csi_rssi_val">—</span></div>
-            <div class="stat-row"><span>Pakety/s</span><span id="csi_pps_val">—</span></div>
+            <div class="stat-row"><span>Packets/s</span><span id="csi_pps_val">—</span></div>
             <div class="stat-row"><span>Idle baseline ready</span><span id="csi_idle_val">—</span></div>
 
-            <div class="section-title">DETEKCE POHYBU</div>
+            <div class="section-title">MOTION DETECTION</div>
             <div class="stat-row">
-                <span>Stav pohybu</span>
+                <span>Motion State</span>
                 <span id="csi_motion_val" style="font-weight:bold; font-size:1.2rem">—</span>
             </div>
-            <div class="stat-row"><span>Composite score</span><span id="csi_comp_val">—</span></div>
+            <div class="stat-row"><span>Composite Score</span><span id="csi_comp_val">—</span></div>
             <div class="stat-row"><span>Variance (window)</span><span id="csi_var_val">—</span></div>
             <svg id="csi_graph" viewBox="0 0 100 50" style="width:100%; height:60px; background:#1a1a1a; margin-top:5px; stroke:#03dac6"></svg>
+
+            <div class="section-title">FUSION (Radar + CSI)</div>
+            <div class="stat-row">
+                <span>Fusion stav</span>
+                <span id="fus_presence_val" style="font-weight:bold; font-size:1.2rem">—</span>
+            </div>
+            <div class="stat-row"><span>Confidence</span><span id="fus_conf_val">—</span></div>
+            <div class="stat-row"><span>Zdroj detekce</span><span id="fus_source_val">—</span></div>
+            <div class="stat-row">
+                <span>Fusion povoleno</span>
+                <label class="switch"><input type="checkbox" id="fus_en" onchange="toggleFusion(this.checked)"><span class="slider"></span></label>
+            </div>
 
             <div class="section-title">KONFIGURACE</div>
 
@@ -442,7 +469,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             <input type="range" id="csi_pub" min="200" max="5000" step="100" value="1000"
                    oninput="$('csi_pub_lbl').innerText=this.value">
 
-            <button onclick="saveCSIConfig()" style="margin-top:12px">Save configuration</button>
+            <button onclick="saveCSIConfig()" style="margin-top:12px">Save Configuration</button>
 
             <div class="section-title">AKCE</div>
             <div style="display:flex; flex-wrap:wrap; gap:6px">
@@ -454,9 +481,9 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <div id="csi_calib_fill" style="height:100%; width:0%; background:var(--accent); transition:width 0.3s"></div>
             </div>
             <div style="font-size:0.75rem; color:#777; margin-top:8px">
-                <b><b>Auto-calibrate:</b> 10 seconds of variance sampling at rest, sets threshold = mean × 1.5. Use when room is empty.<br>
-                <b>Reset baseline:</b> clears learned idle values (turbulence, phase). After moving sensor.<br>
-                <b>Reconnect WiFi:</b> disconnections / RSSI drops solved by re-association.
+                <b>Auto-calibration:</b> 10 seconds variance sampling in idle, sets threshold = mean × 1.5. Use when room is empty.<br>
+                <b>Reset baseline:</b> clears learned idle values (turbulence, phase). After moving the sensor.<br>
+                <b>Reconnect WiFi:</b> restarts WiFi association to fix interruptions / RSSI drops.
             </div>
         </div>
     </div>
@@ -615,7 +642,7 @@ function renderGateSliders(mov, stat) {
         let s = stat ? stat[i] : 30;
         h += `<div class="gate-wrapper${dimClass}">
             <div class="gate-label" style="width:65px; white-space:nowrap">G${i} <span style="color:#666">(${dist}cm)</span></div>
-            <input type="range" class="mov-slider" id="g_m_${i}" value="${m}" min="0" max="100" title="Movement G${i}" oninput="$('lm_${i}').innerText=this.value" style="flex:1">
+            <input type="range" class="mov-slider" id="g_m_${i}" value="${m}" min="0" max="100" title="Move G${i}" oninput="$('lm_${i}').innerText=this.value" style="flex:1">
             <span id="lm_${i}" style="width:22px; text-align:right; color:#03dac6; font-size:0.75rem">${m}</span>
             <input type="range" class="stat-slider" id="g_s_${i}" value="${s}" min="0" max="100" title="Static G${i}" oninput="$('ls_${i}').innerText=this.value" style="flex:1">
             <span id="ls_${i}" style="width:22px; text-align:right; color:#bb86fc; font-size:0.75rem">${s}</span>
@@ -719,7 +746,7 @@ function loadCSIConfig() {
         }
 
         // Live status
-        $('csi_active_val').innerText = d.active ? 'YES' : 'NE';
+        $('csi_active_val').innerText = d.active ? 'ANO' : 'NE';
         $('csi_active_val').style.color = d.active ? 'var(--accent)' : '#888';
         $('csi_ssid_val').innerText  = d.wifi_ssid || '—';
         $('csi_rssi_val').innerText  = (d.wifi_rssi !== undefined && d.wifi_rssi !== 0) ? (d.wifi_rssi + ' dBm') : '—';
@@ -732,6 +759,12 @@ function loadCSIConfig() {
         }
         if (d.composite !== undefined) $('csi_comp_val').innerText = d.composite.toFixed(4);
         if (d.variance !== undefined) $('csi_var_val').innerText = d.variance.toFixed(4);
+
+        // Fusion
+        $('fus_en').checked = !!d.fusion_enabled;
+        if (d.fusion) {
+            updateFusionUI(d.fusion);
+        }
     });
 }
 
@@ -762,6 +795,31 @@ function updateCSIUI(csi) {
     } else {
         $('csi_calib_bar').style.display = 'none';
     }
+
+    // Fusion live update (nested in SSE csi object)
+    if (csi.fusion) updateFusionUI(csi.fusion);
+}
+
+function updateFusionUI(f) {
+    if (!f) return;
+    let srcLabels = {none:'—', radar:'Radar', csi:'CSI', both:'Radar + CSI'};
+    $('fus_presence_val').innerText = f.presence ? 'DETEKCE' : 'KLID';
+    $('fus_presence_val').style.color = f.presence ? 'var(--warn)' : '#888';
+    $('fus_conf_val').innerText = (f.confidence !== undefined) ? (f.confidence * 100).toFixed(0) + '%' : '—';
+    $('fus_source_val').innerText = srcLabels[f.source] || f.source || '—';
+}
+
+function toggleFusion(en) {
+    let p = new URLSearchParams();
+    p.append('fusion_enabled', en ? '1' : '0');
+    api('csi', {method:'POST', body:p}).then(r=>r.json()).then(d => {
+        showToast(en ? 'Fusion zapnut' : 'Fusion vypnut');
+        if (!en) {
+            $('fus_presence_val').innerText = '—';
+            $('fus_conf_val').innerText = '—';
+            $('fus_source_val').innerText = '—';
+        }
+    });
 }
 
 function saveCSIConfig() {
@@ -773,7 +831,7 @@ function saveCSIConfig() {
     p.append('publish_ms', $('csi_pub').value);
     api('csi', {method:'POST', body:p}).then(r=>r.json()).then(d => {
         if (d.needs_restart) {
-            if (confirm('Changing CSI enable requires ESP restart. Restart now?')) {
+            if (confirm('Changing CSI requires ESP restart. Restart now?')) {
                 api('restart', {method:'POST'});
             }
         }
@@ -787,7 +845,7 @@ function csiCalibrate() {
 }
 
 function csiResetBaseline() {
-    if (!confirm('Reset idle baseline? CSI will re-collect samples for N seconds.')) return;
+    if (!confirm('Reset idle baseline? CSI will re-collect samples for a few seconds.')) return;
     api('csi/reset_baseline', {method:'POST'});
 }
 
@@ -795,46 +853,120 @@ function csiReconnect() {
     api('csi/reconnect', {method:'POST'});
 }
 
+// --- Event Timeline ---
+const EVT_TYPES = {
+    0: {name:'SYS', color:'#888', icon:'⚙️'},
+    1: {name:'MOV', color:'#03dac6', icon:'👤'},
+    2: {name:'TMP', color:'#cf6679', icon:'🚨'},
+    3: {name:'NET', color:'#bb86fc', icon:'🌐'},
+    4: {name:'HB',  color:'#4caf50', icon:'💚'},
+    5: {name:'SEC', color:'#ff9800', icon:'🔒'}
+};
+let evtOffset = 0;
+let evtAllLoaded = false;
+
+function evtTimeStr(ts) {
+    if (ts > 1700000000) {
+        let d = new Date(ts * 1000);
+        return d.toLocaleString('cs-CZ', {day:'numeric',month:'numeric', hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }
+    return Math.floor(ts/3600) + "h " + Math.floor((ts%3600)/60) + "m " + (ts%60) + "s";
+}
+
+function renderTimelineBar(events) {
+    // 24h density heatmap — 288 bins (5 min each)
+    let now = Math.floor(Date.now() / 1000);
+    let bins = new Array(288).fill(0);
+    let maxBin = 1;
+    let hasBins = false;
+    events.forEach(e => {
+        if (e.ts > 1700000000) {
+            let age = now - e.ts;
+            if (age >= 0 && age < 86400) {
+                let bin = 287 - Math.floor(age / 300);
+                if (bin >= 0 && bin < 288) { bins[bin]++; hasBins = true; }
+            }
+        }
+    });
+    if (!hasBins) { $('evt_timeline').innerHTML = '<text x="144" y="20" text-anchor="middle" fill="#444" font-size="10">Not enough data for timeline</text>'; return; }
+    for (let i = 0; i < 288; i++) if (bins[i] > maxBin) maxBin = bins[i];
+
+    let svg = '';
+    for (let i = 0; i < 288; i++) {
+        if (bins[i] === 0) continue;
+        let h = Math.max(2, (bins[i] / maxBin) * 28);
+        let a = 0.3 + 0.7 * (bins[i] / maxBin);
+        svg += `<rect x="${i}" y="${32-h}" width="1" height="${h}" fill="var(--accent)" opacity="${a.toFixed(2)}"/>`;
+    }
+    // SEC events highlighted in red
+    events.forEach(e => {
+        if (e.type === 5 && e.ts > 1700000000) {
+            let age = now - e.ts;
+            if (age >= 0 && age < 86400) {
+                let bin = 287 - Math.floor(age / 300);
+                svg += `<rect x="${bin}" y="0" width="1" height="32" fill="#ff9800" opacity="0.6"/>`;
+            }
+        }
+    });
+    $('evt_timeline').innerHTML = svg;
+}
+
+function renderEventList(events, append) {
+    let container = $('evt_timeline_list');
+    let h = append ? '' : '';
+    events.forEach(e => {
+        let t = EVT_TYPES[e.type] || EVT_TYPES[0];
+        let timeStr = evtTimeStr(e.ts);
+        let distStr = e.dist > 0 ? `<span style="color:#888">${e.dist}cm</span>` : '';
+        h += `<div style="display:flex; gap:8px; padding:6px 4px; border-left:3px solid ${t.color}; margin-bottom:2px; background:#111; border-radius:0 4px 4px 0; align-items:flex-start">
+            <div style="flex-shrink:0; width:20px; text-align:center">${t.icon}</div>
+            <div style="flex:1; min-width:0">
+                <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap">
+                    <span style="font-size:0.75rem; color:#666; white-space:nowrap">${timeStr}</span>
+                    <span style="font-size:0.7rem; color:${t.color}; font-weight:bold">${t.name} ${distStr}</span>
+                </div>
+                <div style="font-size:0.82rem; margin-top:2px; word-break:break-word">${e.msg}</div>
+            </div>
+        </div>`;
+    });
+    if (append) { container.innerHTML += h; }
+    else { container.innerHTML = h || '<div style="text-align:center; padding:20px; color:#555">No events</div>'; }
+}
+
 function loadEvents() {
-    fetch('/api/events').then(r=>r.json()).then(d => {
-        let h = '';
-        d.forEach(e => {
-            let typeColor = '#fff';
-            let typeName = '?';
-            // EVT_SYSTEM=0, PRESENCE=1, TAMPER=2, WIFI=3, HEARTBEAT=4, SECURITY=5
-            switch(e.type) {
-                case 0: typeName='SYS'; typeColor='#888'; break;
-                case 1: typeName='MOV'; typeColor='#03dac6'; break;
-                case 2: typeName='TMP'; typeColor='#cf6679'; break;
-                case 3: typeName='NET'; typeColor='#bb86fc'; break;
-                case 4: typeName='HB';  typeColor='#4caf50'; break;
-                case 5: typeName='SEC'; typeColor='#ff9800'; break;
-            }
-            
-            let u = e.ts;
-            let timeStr;
-            if (u > 1700000000) {
-                // NTP epoch timestamp — show as HH:MM
-                let d = new Date(u * 1000);
-                timeStr = d.toLocaleString('cs-CZ', {day:'numeric',month:'numeric', hour:'2-digit',minute:'2-digit'});
-            } else {
-                // Uptime seconds (NTP not synced)
-                timeStr = Math.floor(u/3600) + "h " + Math.floor((u%3600)/60) + "m";
-            }
-            
-            h += `<tr style="border-bottom:1px solid #222">
-                <td style="padding:5px; white-space:nowrap">${timeStr}</td>
-                <td style="padding:5px; color:${typeColor}; font-weight:bold">${typeName}</td>
-                <td style="padding:5px">${e.msg}</td>
-                <td style="padding:5px">${e.dist > 0 ? (e.dist+"cm") : "-"}</td>
-            </tr>`;
-        });
-        $('event_list').innerHTML = h || '<tr><td colspan="4" style="text-align:center; padding:10px; color:#666">No events</td></tr>';
+    evtOffset = 0;
+    evtAllLoaded = false;
+    let typeFilter = $('evt_filter').value;
+    let url = '/api/events?limit=50&type=' + typeFilter;
+    fetch(url).then(r=>r.json()).then(d => {
+        let events = d.events || [];
+        let total = d.total || 0;
+        $('evt_total').textContent = total + ' total';
+        renderTimelineBar(events);
+        renderEventList(events, false);
+        evtOffset = events.length;
+        evtAllLoaded = events.length >= (d.count !== undefined ? total : events.length);
+        $('evt_load_more').style.display = (events.length >= 50 && !evtAllLoaded) ? 'block' : 'none';
     });
 }
 
+function loadMoreEvents() {
+    let typeFilter = $('evt_filter').value;
+    fetch('/api/events?limit=50&offset=' + evtOffset + '&type=' + typeFilter).then(r=>r.json()).then(d => {
+        let events = d.events || [];
+        renderEventList(events, true);
+        evtOffset += events.length;
+        if (events.length < 50) evtAllLoaded = true;
+        $('evt_load_more').style.display = evtAllLoaded ? 'none' : 'block';
+    });
+}
+
+function exportEvents() {
+    window.open('/api/events/csv', '_blank');
+}
+
 function clearEvents() {
-    if(confirm("Smazat celou historii?")) {
+    if(confirm("Delete entire history?")) {
         api('events/clear', {method:'POST'}).then(() => loadEvents());
     }
 }
@@ -1016,7 +1148,7 @@ function renderZones() {
                     <option value="2" ${z.level==2?'selected':''}>Warn</option>
                     <option value="3" ${z.level==3?'selected':''}>ALARM</option>
                 </select>
-                <select id="z_ab_${i}" style="flex:2" title="Alarm behavior in zone">
+                <select id="z_ab_${i}" style="flex:2" title="Zone alarm behavior">
                     <option value="0" ${ab==0?'selected':''}>⏱ Entry delay</option>
                     <option value="1" ${ab==1?'selected':''}>🚨 Immediate</option>
                     <option value="2" ${ab==2?'selected':''}>🔕 Ignorovat</option>
@@ -1059,7 +1191,7 @@ function saveZones() {
         body: JSON.stringify(zones)
     }).then(r => {
         if(r.ok) showToast("Zones saved");
-        else showToast("Save failed");
+        else showToast("Save error");
     });
 }
 
@@ -1114,7 +1246,7 @@ function pollLearn() {
             if (d.suggest_ready) {
                 txt += ` <button onclick="applyLearnZone(${d.suggest_min_cm},${d.suggest_max_cm})" class="sec" style="padding:2px 8px; margin-left:6px">Apply</button>`;
             } else {
-                txt += ' ⚠️ Nedostatek dat.';
+                txt += ' ⚠️ Not enough data.';
             }
             stat.innerHTML = txt;
         } else {
@@ -1140,7 +1272,7 @@ function saveGates() {
         body: JSON.stringify({mov, stat})
     }).then(r => {
         if(r.ok) showToast("Gates saved");
-        else showToast("Save failed hradel");
+        else showToast("Error saving gates");
     });
 }
 function setPreset(t) {
@@ -1189,9 +1321,9 @@ function updateAlarmUI(state) {
     let btn = $('btn_arm');
     if(state === 'disarmed') { badge.innerText = '🔓 DISARMED'; badge.style.color='#888'; btn.innerText='ARM'; btn.style.background='#b00020'; }
     else if(state === 'arming') { badge.innerText = '⏳ ARMING...'; badge.style.color='orange'; btn.innerText='CANCEL'; btn.style.background='#3700b3'; }
-    else if(state === 'armed_away') { badge.innerText = '🔒 ARMED'; badge.style.color='#00ff00'; btn.innerText='CANCEL'; btn.style.background='#3700b3'; }
-    else if(state === 'pending') { badge.innerText = '⚠️ PENDING'; badge.style.color='orange'; btn.innerText='CANCEL'; btn.style.background='#3700b3'; }
-    else if(state === 'triggered') { badge.innerText = '🚨 ALARM'; badge.style.color='red'; btn.innerText='CANCEL'; btn.style.background='#3700b3'; }
+    else if(state === 'armed_away') { badge.innerText = '🔒 ARMED'; badge.style.color='#00ff00'; btn.innerText='DISARM'; btn.style.background='#3700b3'; }
+    else if(state === 'pending') { badge.innerText = '⚠️ PENDING'; badge.style.color='orange'; btn.innerText='DISARM'; btn.style.background='#3700b3'; }
+    else if(state === 'triggered') { badge.innerText = '🚨 TRIGGERED'; badge.style.color='red'; btn.innerText='DISARM'; btn.style.background='#3700b3'; }
 }
 function toggleArm() {
     if(alarmArmed) {
@@ -1215,7 +1347,7 @@ function saveAuth() {
     let p = $('txt_auth_pass').value;
     let p2 = $('txt_auth_pass2').value;
     if(!u || !p) { showToast("Enter username and password"); return; }
-    if(p !== p2) { showToast("Passwords do not match"); return; }
+    if(p !== p2) { showToast("Passwords don't match"); return; }
     if(u.length < 4 || p.length < 4) { showToast("Min. 4 znaky"); return; }
 
     fetch(`/api/auth/config?user=${encodeURIComponent(u)}&pass=${encodeURIComponent(p)}`, {

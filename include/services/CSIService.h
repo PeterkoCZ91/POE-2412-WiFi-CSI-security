@@ -63,6 +63,8 @@ public:
     float    getHysteresis()       const { return _hysteresis; }
     uint32_t getPublishInterval()  const { return _publishIntervalMs; }
     uint32_t getTrafficRate()      const { return _trafficRatePps; }
+    uint16_t getTrafficPort()      const { return _trafficPort; }
+    bool     getTrafficICMP()      const { return _trafficICMP; }
 
     // Configuration setters
     void setPublishInterval(uint32_t ms) { if (ms < 100) ms = 100; if (ms > 60000) ms = 60000; _publishIntervalMs = ms; }
@@ -70,6 +72,8 @@ public:
     void setHysteresis(float hys)        { if (hys < 0.1f) hys = 0.1f; if (hys > 0.99f) hys = 0.99f; _hysteresis = hys; }
     void setWindowSize(uint16_t ws);
     void setTrafficRate(uint32_t pps);
+    void setTrafficPort(uint16_t port);
+    void setTrafficICMP(bool icmp);
 
     // Diagnostics actions
     void resetIdleBaseline();
@@ -94,6 +98,8 @@ private:
     float _hysteresis = 0.7f;
     uint32_t _publishIntervalMs = 1000;
     uint32_t _trafficRatePps = 100;
+    uint16_t _trafficPort = 7;      // Default: echo port (7), alt: 53 (DNS)
+    bool     _trafficICMP = false;   // ICMP echo (ping) mode — better response rate
 
     // HT20 subcarrier selection (12 subcarriers, avoiding guard bands <11 and >52, DC=32)
     static constexpr uint8_t NUM_SUBCARRIERS = 12;

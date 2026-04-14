@@ -288,20 +288,34 @@ void LD2412Service::update() {
             _lastDist = 0;
         }
 
-        // Static zone auto-learning — collects samples of pure static energy (no motion)
+        // Reflector auto-learning — captures any persistent detection in empty room
         if (_learnActive) {
             if (now - _learnStart > (unsigned long)_learnDuration * 1000) {
                 _learnActive = false;
-                DBG("LEARN", "Done: %lu static / %lu total samples", _learnStaticSamples, _learnTotalSamples);
+                DBG("LEARN", "Done: %lu reflections / %lu total samples", _learnStaticSamples, _learnTotalSamples);
                 _learnDone = true;  // flag pro main loop → Telegram notifikace
             } else {
                 _learnTotalSamples++;
-                // Pure static = no motion, static energy present
-                if (movEn < 10 && statEn > 15 && statDist > 0) {
-                    uint8_t gate = (uint8_t)(statDist / _gateResolutionCm);
+                // Any detection = potential reflector (room should be empty)
+                bool hasMoving = (movEn > 5 && movDist > 0);
+                bool hasStatic = (statEn > 5 && statDist > 0);
+
+                if (hasMoving) {
+                    uint8_t gate = (uint8_t)(movDist / _gateResolutionCm);
                     if (gate < 14) {
                         _learnGateCount[gate]++;
                         _learnStaticSamples++;
+                        _learnEnergyType[gate] |= 0x02; // moving
+                        if (movEn > _learnMaxEnergy[gate]) _learnMaxEnergy[gate] = movEn;
+                    }
+                }
+                if (hasStatic) {
+                    uint8_t gate = (uint8_t)(statDist / _gateResolutionCm);
+                    if (gate < 14) {
+                        _learnGateCount[gate]++;
+                        if (!hasMoving) _learnStaticSamples++; // avoid double-counting
+                        _learnEnergyType[gate] |= 0x01; // static
+                        if (statEn > _learnMaxEnergy[gate]) _learnMaxEnergy[gate] = statEn;
                     }
                 }
             }
@@ -680,7 +694,7 @@ bool LD2412Service::factoryReset() {
     
     if (!result) {
         DBG("RADAR", "Standard factory reset failed, trying aggressive method...");
-        // Aggressive method: send command directly without waiting for enableConfig ACK
+        // Aggressive method: send command directly without waiting for ACK from enableConfig
         _serial->flush();
         uint8_t enableCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
         uint8_t resetCmd[]  = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xA2, 0x00, 0x04, 0x03, 0x02, 0x01};
@@ -792,12 +806,14 @@ unsigned long LD2412Service::getHoldTime() const {
 bool LD2412Service::startStaticLearn(uint16_t duration_s) {
     if (_learnActive) return false;
     memset(_learnGateCount, 0, sizeof(_learnGateCount));
+    memset(_learnMaxEnergy, 0, sizeof(_learnMaxEnergy));
+    memset(_learnEnergyType, 0, sizeof(_learnEnergyType));
     _learnTotalSamples  = 0;
     _learnStaticSamples = 0;
     _learnDuration      = duration_s;
     _learnStart         = millis();
     _learnActive        = true;
-    DBG("LEARN", "Static learn started (%ds)", duration_s);
+    DBG("LEARN", "Reflector learn started (%ds) — room must be empty!", duration_s);
     return true;
 }
 
@@ -811,17 +827,15 @@ int LD2412Service::getLearnProgress() const {
 void LD2412Service::getLearnResultJson(JsonDocument& doc) {
     doc["active"]   = _learnActive;
     doc["progress"] = getLearnProgress();
-    doc["total_samples"]  = _learnTotalSamples;
-    doc["static_samples"] = _learnStaticSamples;
+    doc["total_samples"]     = _learnTotalSamples;
+    doc["reflection_samples"] = _learnStaticSamples;
 
-    // Static frequency (% of samples with pure static energy)
-    float staticFreq = (_learnTotalSamples > 0)
+    // Detection frequency (% of frames with any reflection)
+    float reflFreq = (_learnTotalSamples > 0)
         ? (_learnStaticSamples * 100.0f / _learnTotalSamples) : 0.0f;
-    doc["static_freq_pct"] = (int)staticFreq;
+    doc["static_freq_pct"] = (int)reflFreq;
 
-    // Najdi top 3 gates
-    uint32_t sorted[14];
-    memcpy(sorted, _learnGateCount, sizeof(_learnGateCount));
+    // Per-gate breakdown
     JsonArray gates = doc["gates"].to<JsonArray>();
     for (int i = 0; i < 14; i++) {
         JsonObject g = gates.add<JsonObject>();
@@ -830,9 +844,16 @@ void LD2412Service::getLearnResultJson(JsonDocument& doc) {
         g["count"] = _learnGateCount[i];
         g["pct"]  = (_learnTotalSamples > 0)
             ? (int)(_learnGateCount[i] * 100 / _learnTotalSamples) : 0;
+        g["max_energy"] = _learnMaxEnergy[i];
+        // Type: "none", "static", "moving", "both"
+        const char* typeStr = "none";
+        if (_learnEnergyType[i] == 0x01) typeStr = "static";
+        else if (_learnEnergyType[i] == 0x02) typeStr = "moving";
+        else if (_learnEnergyType[i] == 0x03) typeStr = "both";
+        g["type"] = typeStr;
     }
 
-    // Most frequent gate = recommended zone
+    // Top gate = most frequent reflector
     int topGate = 0;
     for (int i = 1; i < 14; i++) {
         if (_learnGateCount[i] > _learnGateCount[topGate]) topGate = i;
@@ -842,6 +863,12 @@ void LD2412Service::getLearnResultJson(JsonDocument& doc) {
     doc["top_gate"]   = topGate;
     doc["top_cm"]     = (int)(topGate * _gateResolutionCm);
     doc["confidence"] = confidence;
+    doc["top_energy"] = _learnMaxEnergy[topGate];
+    const char* topType = "none";
+    if (_learnEnergyType[topGate] == 0x01) topType = "static";
+    else if (_learnEnergyType[topGate] == 0x02) topType = "moving";
+    else if (_learnEnergyType[topGate] == 0x03) topType = "both";
+    doc["top_type"] = topType;
 
     // Suggested zone (±1 gate range)
     if (confidence >= 5 && _learnStaticSamples >= 10) {
@@ -897,7 +924,7 @@ void LD2412Service::setTamperDetected(bool tamper) {
         }
         xSemaphoreGive(_mutex);
     } else {
-        // Mutex timeout - log warning but do NOT modify state without protection
+        // Mutex timeout - log warning, but DO NOT modify state without protection
         // This should not happen during normal operation
         DBG("RADAR", "WARNING: setTamperDetected mutex timeout!");
     }

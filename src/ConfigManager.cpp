@@ -50,6 +50,7 @@ void ConfigManager::load() {
     _config.csi_hysteresis = _prefs.getFloat("csi_hyst",   0.7f);
     _config.csi_window     = _prefs.getUShort("csi_win",   75);
     _config.csi_publish_ms = _prefs.getUShort("csi_pubms", 1000);
+    _config.fusion_enabled = _prefs.getBool ("fus_en",     true);
 
     // Persist defaults to NVS on first boot (prevents NOT_FOUND errors)
     if (!_prefs.isKey("mqtt_server")) {
@@ -102,6 +103,7 @@ void ConfigManager::save() {
     _prefs.putFloat ("csi_hyst",   _config.csi_hysteresis);
     _prefs.putUShort("csi_win",    _config.csi_window);
     _prefs.putUShort("csi_pubms",  _config.csi_publish_ms);
+    _prefs.putBool  ("fus_en",     _config.fusion_enabled);
 
     DBG("CONFIG", "Configuration saved to NVS");
 }
