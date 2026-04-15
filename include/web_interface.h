@@ -3,9 +3,9 @@
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML>
-<html lang="en">
+<html lang="cs">
 <head>
-  <title>LD2412 Security</title>
+  <title>LD2412 Zabezpečení</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
@@ -81,27 +81,188 @@ const char index_html[] PROGMEM = R"rawliteral(
         input[type=text], input[type=number], select { padding: 10px; font-size: 1rem; }
     }
   </style>
+  <script>
+  // i18n — CZ/EN language support
+  const I18N = {
+    cs: {
+      title: "LD2412 Zabezpečení", loading: "NAČÍTÁM...", arm: "STŘEŽIT", disarm: "ZRUŠIT",
+      disarmed: "🔓 NESTŘEŽENO", arming: "⏳ AKTIVUJI...", armed: "🔒 STŘEŽENO",
+      pending: "⚠️ ČEKÁNÍ", triggered: "🚨 POPLACH",
+      sensor_health: "Zdraví senzoru", uart_state: "UART Stav", frame_rate: "Snímková frekvence",
+      ram: "RAM (Volná/Min)", chip_temp: "Teplota čipu", uptime: "Doba běhu",
+      factory_reset_confirm: "Opravdu provést tovární reset radaru?",
+      tab_basic: "Základní", tab_security: "Bezpečnost", tab_gates: "Hradla",
+      tab_network: "Síť & Cloud", tab_zones: "Zóny", tab_events: "Události", tab_csi: "CSI",
+      device_name: "Jméno zařízení (mDNS)", hold_time: "Doba držení (ms)",
+      move_sens: "Citlivost Pohyb (%)", enable_diag: "Povolit Diagnostiku",
+      antimask_title: "ANTI-MASKING (Sabotáž zakrytím)", antimask_enable: "Povolit alarm při tichu",
+      timeout_sec: "Časový limit (sec)",
+      antimask_hint: "Pro sklady, chaty, serverovny <b>VYPNĚTE</b> - ticho je tam normální.<br>Pro obývané prostory ZAPNĚTE - detekuje zakrytí sensoru.",
+      loiter_title: "LOITERING (Podezřelé postávání)", loiter_enable: "Notifikace při postávání",
+      loiter_hint: "Alarm když někdo stojí &lt;2m od sensoru déle než timeout.",
+      hb_title: "HEARTBEAT (Pravidelný report)",
+      hb_hint: "0 = vypnuto, 4 = každé 4 hodiny zpráva \"jsem OK\".",
+      pet_hint: "Filtruje malé objekty (kočky, psi) s nízkou energií &lt;2m.",
+      entry_delay: "Zpoždění vstupu (sec)", exit_delay: "Zpoždění odchodu (sec)",
+      disarm_reminder: "Připomínka \"Stále NESTŘEŽENO\"",
+      hold_hint: "Doba, po které radar hlásí \"nepřítomnost\" bez detekce.",
+      light_func: "Funkce světla", light_night: "Noční režim (pod práh)", light_day: "Denní režim (nad práh)",
+      light_thr: "Práh světla (0-255)", light_cur: "Aktuální světlo",
+      light_hint: "OUT pin aktivní jen když je světlo pod/nad prahem.<br>Ideální pro noční zabezpečení (režim \"pod práh\").",
+      movement: "Pohyb", static_: "Statika",
+      gate_legend: "Higher = more sensitive &middot; <span style='opacity:0.4'>gray = outside min/max range</span>",
+      set_all: "Nastavit vše:", indoor: "Interiér", outdoor: "Exteriér", pets: "Zvířata",
+      save_gates: "Uložit Hradla", save_mqtt: "Uložit MQTT", save: "Uložit",
+      username: "Uživatel", new_pass: "Nové heslo", change_pass: "Změnit heslo",
+      add_zone: "+ Přidat Zónu", save_zones: "💾 Uložit Zóny", learn_static: "📡 Naučit statiku",
+      filter_all: "Vše", filter_alarm: "Alarm", filter_move: "Pohyb",
+      filter_tamper: "Tamper", filter_hb: "Heartbeat", filter_sys: "Systém", filter_net: "Síť",
+      delete: "Smazat", now: "nyní", load_more: "Načíst další...",
+      csi_warn: "<span data-i18n="csi_warn">Tento firmware nebyl zkompilován s podporou WiFi CSI.</span>",
+      csi_active: "Aktivní", csi_idle: "Idle baseline připraven",
+      motion_state: "Stav pohybu", composite: "Composite skóre",
+      threshold_label: "<span data-i18n="threshold_label">Práh detekce (variance threshold):</span>",
+      save_config: "Uložit konfiguraci", upload_fw: "Nahrát Firmware", saved: "Uloženo",
+      yes: "ANO", no_collecting: "NE — sbírá vzorky", motion: "POHYB", idle: "KLID",
+      coverage: "Pokrytí", resolution: "Rozlišení", gate: "hradlo",
+      hold_state: "DRŽENÍ", tamper_state: "SABOTÁŽ!",
+      csi_restart: "Změna povolení CSI vyžaduje restart ESP. Restartovat teď?",
+      calib_started: "Kalibrace zahájena (10s, neobývej místnost)",
+      reset_confirm: "Resetovat idle baseline? CSI bude N sekund znovu sbírat vzorky.",
+      no_events: "No events", del_history: t('del_history'),
+      noise_calib: t('noise_calib'),
+      tg_error: "Chyba", tg_unknown: "Neznámá",
+      zone_name: "Název", zone_immediate: "🚨 Okamžité", zone_delay: "Zpoždění (ms)",
+      zone_behavior: "Chování alarmu v zóně",
+      zone_default: "Zóna", zones_saved: t('zones_saved'), save_error: t('save_error'),
+      starting: "Spouštím...", apply: "Použít",
+      zone_added: "' + t('zone_added') + '",
+      gates_saved: t('gates_saved'), gates_error: t('gates_error'),
+      preset_applied: "Předvolba nastavena", restarting: "Restartování...",
+      enter_creds: t('enter_creds'), pass_mismatch: t('pass_mismatch'),
+      pass_changed: "Heslo změněno", creds_changed: "Přihlašovací údaje změněny. Zařízení se restartuje.",
+      conn_lost: "Spojení ztraceno",
+      default_pass_warn: "⚠️ Výchozí heslo admin/admin — změňte v sekci Síť &amp; Cloud",
+      timeline_title: "<span data-i18n="timeline_title">TIMELINE UDÁLOSTÍ</span>", total: "celkem",
+      no_timeline: "<tspan data-i18n="no_timeline">Nedostatek dat pro timeline</tspan>",
+      tgen_mode: "Režim", tgen_port: "Cílový port", tgen_pps: "<span data-i18n="tgen_pps">Paketů/s (PPS):</span>",
+      actions: "AKCE", config: "<span data-i18n="config">KONFIGURACE</span>",
+      not_enough: "t('not_enough')", static_label: "Statika",
+      auto_calib: "📐 Auto-kalibrace prahu (10s)", reset_baseline: "♻️ Reset idle baseline",
+      reconnect_wifi: "📶 Reconnect WiFi",
+      detection_src: "Zdroj detekce", fusion_enabled: "Fusion povoleno",
+      enabled: "Povoleno",
+      hysteresis: "<span data-i18n="hysteresis">Hystereze (exit multiplier):</span>", window_size: "<span data-i18n="window_size">Velikost okna (vzorky):</span>",
+      pub_interval: "<span data-i18n="pub_interval">Interval publikace (ms):</span>",
+    },
+    en: {
+      title: "LD2412 Security", loading: "LOADING...", arm: "ARM", disarm: "DISARM",
+      disarmed: "🔓 DISARMED", arming: "⏳ ARMING...", armed: "🔒 ARMED",
+      pending: "⚠️ PENDING", triggered: "🚨 TRIGGERED",
+      sensor_health: "Sensor Health", uart_state: "UART State", frame_rate: "Frame Rate",
+      ram: "RAM (Free/Min)", chip_temp: "Chip Temperature", uptime: "Uptime",
+      factory_reset_confirm: "Really perform radar factory reset?",
+      tab_basic: "Basic", tab_security: "Security", tab_gates: "Gates",
+      tab_network: "Network & Cloud", tab_zones: "Zones", tab_events: "Events", tab_csi: "CSI",
+      device_name: "Device Name (mDNS)", hold_time: "Hold Time (ms)",
+      move_sens: "Movement Sensitivity (%)", enable_diag: "Enable Diagnostics",
+      antimask_title: "ANTI-MASKING (Tamper by Covering)", antimask_enable: "Enable silence alarm",
+      timeout_sec: "Timeout (sec)",
+      antimask_hint: "For warehouses, cabins, server rooms <b>DISABLE</b> — silence is normal.<br>For occupied spaces ENABLE — detects sensor covering.",
+      loiter_title: "LOITERING (Suspicious Lingering)", loiter_enable: "Loitering notification",
+      loiter_hint: "Alarm when someone stands &lt;2m from sensor longer than timeout.",
+      hb_title: "HEARTBEAT (Periodic Report)",
+      hb_hint: "0 = disabled, 4 = every 4 hours 'I'm OK' message.",
+      pet_hint: "Filters small objects (cats, dogs) with low energy &lt;2m.",
+      entry_delay: "Entry Delay (sec)", exit_delay: "Exit Delay (sec)",
+      disarm_reminder: "Reminder \"Still DISARMED\"",
+      hold_hint: "Duration after which radar reports 'no presence' without detection.",
+      light_func: "Light Function", light_night: "Night mode (below threshold)", light_day: "Day mode (above threshold)",
+      light_thr: "Light Threshold (0-255)", light_cur: "Current Light",
+      light_hint: "OUT pin active only when light is below/above threshold.<br>Ideal for night security ('below threshold' mode).",
+      movement: "Movement", static_: "Static",
+      gate_legend: "Higher = more sensitive &middot; <span style='opacity:0.4'>gray = outside min/max range</span>",
+      set_all: "Set all:", indoor: "Indoor", outdoor: "Outdoor", pets: "Pets",
+      save_gates: "Save Gates", save_mqtt: "Save MQTT", save: "Save",
+      username: "Username", new_pass: "New Password", change_pass: "Change Password",
+      add_zone: "+ Add Zone", save_zones: "💾 Save Zones", learn_static: "📡 Learn Static",
+      filter_all: "All", filter_alarm: "Alarm", filter_move: "Movement",
+      filter_tamper: "Tamper", filter_hb: "Heartbeat", filter_sys: "System", filter_net: "Network",
+      delete: "Delete", now: "now", load_more: "Load more...",
+      csi_warn: "This firmware was not compiled with WiFi CSI support (missing <code>-D USE_CSI=1</code>). To enable, upload the <b>esp32_poe_csi</b> variant.",
+      csi_active: "Active", csi_idle: "Idle baseline ready",
+      motion_state: "Motion State", composite: "Composite Score",
+      threshold_label: "Detection threshold (variance):",
+      save_config: "Save Configuration", upload_fw: "Upload Firmware", saved: "Saved",
+      yes: "YES", no_collecting: "NO — collecting samples", motion: "MOTION", idle: "IDLE",
+      coverage: "Coverage", resolution: "Resolution", gate: "gate",
+      hold_state: "HOLD", tamper_state: "TAMPER!",
+      csi_restart: "Changing CSI requires ESP restart. Restart now?",
+      calib_started: "Calibration started (10s, keep room empty)",
+      reset_confirm: "Reset idle baseline? CSI will re-collect samples for a few seconds.",
+      no_events: "No events", del_history: "Delete entire history?",
+      noise_calib: "Start noise calibration? (60s, do not move in front of sensor)",
+      tg_error: "Error", tg_unknown: "Unknown",
+      zone_name: "Name", zone_immediate: "🚨 Immediate", zone_delay: "Delay (ms)",
+      zone_behavior: "Zone alarm behavior",
+      zone_default: "Zone", zones_saved: "Zones saved", save_error: "Save error",
+      starting: "Starting...", apply: "Apply",
+      zone_added: "→ Zone added, don't forget to save!",
+      gates_saved: "Gates saved", gates_error: "Error saving gates",
+      preset_applied: "Preset applied", restarting: "Restarting...",
+      enter_creds: "Enter username and password", pass_mismatch: "Passwords don't match",
+      pass_changed: "Password changed", creds_changed: "Credentials changed. Device will restart.",
+      conn_lost: "Connection lost",
+      default_pass_warn: "⚠️ Default password admin/admin — change in Network &amp; Cloud",
+      timeline_title: "EVENT TIMELINE", total: "total",
+      no_timeline: "Not enough data for timeline",
+      tgen_mode: "Mode", tgen_port: "Target Port", tgen_pps: "Packets/s (PPS):",
+      actions: "ACTIONS", config: "CONFIGURATION",
+      not_enough: "Not enough data.", static_label: "Static",
+      auto_calib: "📐 Auto-calibrate threshold (10s)", reset_baseline: "♻️ Reset idle baseline",
+      reconnect_wifi: "📶 Reconnect WiFi",
+      detection_src: "Detection source", fusion_enabled: "Fusion enabled",
+      enabled: "Enabled",
+      hysteresis: "Hysteresis (exit multiplier):", window_size: "Window size (samples):",
+      pub_interval: "Publish interval (ms):",
+    }
+  };
+  let LANG = localStorage.getItem('lang') || 'cs';
+  function t(k) { return (I18N[LANG] && I18N[LANG][k]) || (I18N.en[k]) || k; }
+  function setLang(l) { LANG = l; localStorage.setItem('lang', l); applyLang(); }
+  function applyLang() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      let k = el.getAttribute('data-i18n');
+      if (el.tagName === 'INPUT') el.placeholder = t(k);
+      else if (el.tagName === 'OPTION') el.textContent = t(k);
+      else el.innerHTML = t(k);
+    });
+    document.querySelector('#lang_btn').textContent = LANG === 'cs' ? '🇬🇧 EN' : '🇨🇿 CZ';
+    document.title = t('title');
+  }
+  </script>
 </head>
-<body>
+<body onload="applyLang()">
 
   <h2>
     LD2412 <span style="font-size:0.6em; color:#666" id="fw_ver">...</span>
-    <span id="sse_icon" class="icon" title="Realtime connection"></span>
+    <span id="sse_icon" class="icon" title="Realtime"></span>
     <span id="wifi_icon" class="icon" title="ETH"></span>
     <span id="mqtt_icon" class="icon" title="MQTT"></span>
+    <button id="lang_btn" onclick="setLang(LANG==='cs'?'en':'cs')" style="width:auto; padding:2px 8px; font-size:0.7rem; background:#333; border-radius:4px; margin:0; min-height:auto">🇬🇧 EN</button>
   </h2>
 
   <div id="security_warning" style="background:#cf6679; color:black; padding:10px; border-radius:8px; margin-bottom:10px; display:none; text-align:center; font-weight:bold;">
-    ⚠️ Default password admin/admin — change in Network &amp; Cloud
+    <span data-i18n="default_pass_warn">⚠️ Výchozí heslo admin/admin — změňte v sekci Síť &amp; Cloud</span>
   </div>
 
   <div class="grid">
     <!-- MAIN STATUS -->
     <div class="card">
         <div class="gauge">
-            <div id="state_text" style="color:#888; font-weight:bold; letter-spacing:2px; margin-bottom:5px">LOADING...</div>
+            <div id="state_text" style="color:#888; font-weight:bold; letter-spacing:2px; margin-bottom:5px" data-i18n="loading">NAČÍTÁM...</div>
             <div id="alarm_badge" style="margin-bottom:8px; font-size:0.9rem; font-weight:bold; color:#888">---</div>
-            <button id="btn_arm" onclick="toggleArm()" style="width:auto; padding:8px 20px; margin-bottom:10px; background:#3700b3">ARM</button>
+            <button id="btn_arm" onclick="toggleArm()" style="width:auto; padding:8px 20px; margin-bottom:10px; background:#3700b3" data-i18n="arm">STŘEŽIT</button>
             <div class="big-val" id="dist_val" style="color:var(--accent)">---</div>
             <div class="unit">DISTANCE (cm)</div>
             <svg class="spark" id="graph_dist"></svg>
@@ -109,12 +270,12 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div style="display:flex; gap:10px">
             <div style="flex:1; text-align:center">
                 <div style="color:#03dac6; font-weight:bold" id="mov_val">0%</div>
-                <div class="unit">MOVEMENT</div>
+                <div class="unit" data-i18n="movement">POHYB</div>
                 <svg class="spark" id="graph_mov" style="height:30px; stroke:#03dac6"></svg>
             </div>
             <div style="flex:1; text-align:center">
                 <div style="color:#bb86fc; font-weight:bold" id="stat_val">0%</div>
-                <div class="unit">STATIC</div>
+                <div class="unit" data-i18n="static_">STATIKA</div>
                 <svg class="spark" id="graph_stat" style="height:30px; stroke:#bb86fc"></svg>
             </div>
         </div>
@@ -122,35 +283,35 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <!-- HEALTH & STATS -->
     <div class="card">
-        <div class="stat-row"><span>Sensor Health</span><span id="h_score" class="stat-val">---%</span></div>
-        <div class="stat-row"><span>UART State</span><span id="h_uart">---</span></div>
-        <div class="stat-row"><span>Frame Rate</span><span id="h_fps">--- FPS</span></div>
-        <div class="stat-row"><span>Communication Errors</span><span id="h_err" style="color:var(--warn)">0</span></div>
-        <div class="stat-row"><span>RAM (Free/Min)</span><span id="h_heap">--- / --- KB</span></div>
-        <div class="stat-row"><span>Chip Temperature</span><span id="h_temp">--- °C</span></div>
-        <div class="stat-row"><span>Uptime</span><span id="h_uptime">---</span></div>
+        <div class="stat-row"><span data-i18n="sensor_health">Zdraví senzoru</span><span id="h_score" class="stat-val">---%</span></div>
+        <div class="stat-row"><span data-i18n="uart_state">UART Stav</span><span id="h_uart">---</span></div>
+        <div class="stat-row"><span data-i18n="frame_rate">Snímková frekvence</span><span id="h_fps">--- FPS</span></div>
+        <div class="stat-row"><span>Comm Errors</span><span id="h_err" style="color:var(--warn)">0</span></div>
+        <div class="stat-row"><span data-i18n="ram">RAM (Volná/Min)</span><span id="h_heap">--- / --- KB</span></div>
+        <div class="stat-row"><span data-i18n="chip_temp">Teplota čipu</span><span id="h_temp">--- °C</span></div>
+        <div class="stat-row"><span data-i18n="uptime">Doba běhu</span><span id="h_uptime">---</span></div>
         <div style="display:flex; gap:5px; margin-top:10px; flex-wrap: wrap;">
             <button class="sec" style="flex:1; min-width:80px;" onclick="api('radar/restart', {method:'POST'})">Restart Radar</button>
             <button class="sec" style="flex:1; min-width:80px;" onclick="if(confirm('Restart ESP?')) api('restart', {method:'POST'})">Restart ESP</button>
-            <button class="warn" style="flex:1; min-width:80px;" onclick="if(confirm('Really perform radar factory reset?')) api('radar/factory_reset', {method:'POST'})">Reset MW</button>
+            <button class="warn" style="flex:1; min-width:80px;" onclick="if(confirm(t('factory_reset_confirm'))) api('radar/factory_reset', {method:'POST'})">Reset MW</button>
         </div>
     </div>
 
     <!-- CONTROLS -->
     <div class="card">
         <div class="tabs">
-            <div class="tab active" onclick="tab(0)">Basic</div>
-            <div class="tab" onclick="tab(1)">Security</div>
-            <div class="tab" onclick="tab(2)">Gates</div>
-            <div class="tab" onclick="tab(3)">Network & Cloud</div>
-            <div class="tab" onclick="tab(4)">Zones</div>
-            <div class="tab" onclick="tab(5)">History</div>
-            <div class="tab" onclick="tab(6)">WiFi CSI</div>
+            <div class="tab active" onclick="tab(0)"data-i18n="tab_basic">Základní</div>
+            <div class="tab" onclick="tab(1)"data-i18n="tab_security">Bezpečnost</div>
+            <div class="tab" onclick="tab(2)"data-i18n="tab_gates">Hradla</div>
+            <div class="tab" onclick="tab(3)"data-i18n="tab_network">Síť & Cloud</div>
+            <div class="tab" onclick="tab(4)"data-i18n="tab_zones">Zóny</div>
+            <div class="tab" onclick="tab(5)"data-i18n="tab_events">Historie</div>
+            <div class="tab" onclick="tab(6)"data-i18n="tab_csi">WiFi CSI</div>
         </div>
 
         <!-- TAB 0: BASIC -->
         <div id="tab0">
-            <div class="stat-row"><span>Device Name (mDNS)</span></div>
+            <div class="stat-row"><span data-i18n="device_name">Jméno zařízení (mDNS)</span></div>
             <div style="display:flex; gap:5px; margin-bottom:10px">
                 <input type="text" id="txt_hostname" placeholder="e.g. sensor-room1">
                 <button class="sec" style="width:auto; margin:0" onclick="saveHostname()">OK</button>
@@ -165,10 +326,10 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <input type="number" id="i_max" min="1" max="13" style="width:60px" onchange="saveBasic()">
             </div>
             
-            <div class="stat-row" style="margin-top:10px"><span>Hold Time (ms)</span></div>
+            <div class="stat-row" style="margin-top:10px"><span data-i18n="hold_time">Doba držení (ms)</span></div>
             <input type="number" id="i_hold" step="1000" onchange="saveBasic()">
             
-            <div class="stat-row" style="margin-top:10px"><span>Movement Sensitivity (%)</span></div>
+            <div class="stat-row" style="margin-top:10px"><span data-i18n="move_sens">Citlivost Pohyb (%)</span></div>
             <input type="number" id="i_sens" min="0" max="100" onchange="saveBasic()">
 
             <div style="display:flex; align-items:center; gap:8px; margin-top:15px; margin-bottom:5px">
@@ -177,7 +338,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px">
                 <input type="checkbox" id="chk_eng" style="width:auto" onchange="toggleEng()">
-                <label for="chk_eng" title="Enable detailed gate data (14 zones) and faster communication">Enable Diagnostics</label>
+                <label for="chk_eng" title="Enable detailed gate data (14 zones) and faster communication"><span data-i18n="enable_diag">Povolit Diagnostiku</span></label>
             </div>
             
             <button id="btn_calib" onclick="startCalib()" style="margin-top:15px">Calibrate Noise (60s)</button>
@@ -185,63 +346,63 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         <!-- TAB 1: SECURITY -->
         <div id="tab1" class="hidden">
-            <div class="section-title">ANTI-MASKING (Tamper by Covering)</div>
+            <div class="section-title"><span data-i18n="antimask_title">ANTI-MASKING (Sabotáž zakrytím)</span></div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px">
                 <input type="checkbox" id="chk_am_en" style="width:auto" onchange="saveSec()">
-                <label for="chk_am_en">Enable silence alarm</label>
+                <label for="chk_am_en"><span data-i18n="antimask_enable">Povolit alarm při tichu</span></label>
             </div>
             <div class="row-input">
-                <span>Timeout (sec)</span>
+                <span data-i18n="timeout_sec">Časový limit (sec)</span>
                 <input type="number" id="i_am" placeholder="300" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                ⚠️ For warehouses, cabins, server rooms <b>DISABLE</b> — silence is normal there.<br>
-                For occupied spaces ENABLE — detects sensor covering.
+                ⚠️ <span data-i18n="antimask_hint">Pro sklady, chaty, serverovny <b>VYPNĚTE</b> - ticho je tam normální.<br>
+                Pro obývané prostory ZAPNĚTE - detekuje zakrytí sensoru.</span>
             </p>
 
-            <div class="section-title">LOITERING (Suspicious Lingering)</div>
+            <div class="section-title"><span data-i18n="loiter_title">LOITERING (Podezřelé postávání)</span></div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px">
                 <input type="checkbox" id="chk_loit_en" style="width:auto" onchange="saveSec()">
-                <label for="chk_loit_en">Loitering notification</label>
+                <label for="chk_loit_en"><span data-i18n="loiter_enable">Notifikace při postávání</span></label>
             </div>
             <div class="row-input">
-                <span>Timeout (sec)</span>
+                <span data-i18n="timeout_sec">Časový limit (sec)</span>
                 <input type="number" id="i_loit" placeholder="15" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                Alarm when someone stands &lt;2m from sensor longer than timeout.
+                <span data-i18n="loiter_hint">Alarm když někdo stojí &lt;2m od sensoru déle než timeout.</span>
             </p>
 
-            <div class="section-title">HEARTBEAT (Periodic Report)</div>
+            <div class="section-title"><span data-i18n="hb_title">HEARTBEAT (Pravidelný report)</span></div>
             <div class="row-input">
-                <span>Interval (hours)</span>
+                <span>Interval (h)</span>
                 <input type="number" id="i_hb" placeholder="4" min="0" max="24" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                0 = disabled, 4 = every 4 hours "I'm OK" message.
+                <span data-i18n="hb_hint">0 = vypnuto, 4 = každé 4 hodiny zpráva "jsem OK".</span>
             </p>
 
             <div class="section-title">PET IMMUNITY</div>
             <div class="row-input">
-                <span>Min. movement energy</span>
+                <span>Min Move Energy</span>
                 <input type="number" id="i_pet" placeholder="10" min="0" max="50" style="width:80px" onchange="saveSec()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0">
-                Filters small objects (cats, dogs) with low energy &lt;2m.
+                <span data-i18n="pet_hint">Filtruje malé objekty (kočky, psi) s nízkou energií</span &lt;2m.
             </p>
 
             <div class="section-title">ALARM DELAY</div>
             <div class="row-input">
-                <span>Entry Delay (sec)</span>
+                <span data-i18n="entry_delay">Zpoždění vstupu (sec)</span>
                 <input type="number" id="i_entry_dl" placeholder="30" min="0" max="300" style="width:80px" onchange="saveAlarmConfig()">
             </div>
             <div class="row-input">
-                <span>Exit Delay (sec)</span>
+                <span data-i18n="exit_delay">Zpoždění odchodu (sec)</span>
                 <input type="number" id="i_exit_dl" placeholder="30" min="0" max="300" style="width:80px" onchange="saveAlarmConfig()">
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px">
                 <input type="checkbox" id="chk_dis_rem" style="width:auto" onchange="saveAlarmConfig()">
-                <label for="chk_dis_rem">Reminder "Still DISARMED"</label>
+                <label for="chk_dis_rem"><span data-i18n="disarm_reminder">Připomínka "Stále NESTŘEŽENO"</span></label>
             </div>
 
             <div class="section-title">ABSENCE TIMEOUT</div>
@@ -250,29 +411,29 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <input type="number" id="i_timeout" placeholder="10" min="0" max="255" style="width:80px" onchange="saveTimeout()">
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 15px 0">
-                Duration after which radar reports "no presence" without detection.
+                <span data-i18n="hold_hint">Doba, po které radar hlásí "nepřítomnost" bez detekce.</span>
             </p>
 
             <div class="section-title">LIGHT SENSOR (OUT pin)</div>
             <div class="row-input">
-                <span>Light Function</span>
+                <span data-i18n="light_func">Funkce světla</span>
                 <select id="sel_light_func" style="width:140px" onchange="saveLightConfig()">
-                    <option value="0">Disabled</option>
-                    <option value="1">Night mode (below threshold)</option>
-                    <option value="2">Day mode (above threshold)</option>
+                    <option value="0">Off</option>
+                    <option value="1"data-i18n="light_night">Noční režim (pod práh)</option>
+                    <option value="2"data-i18n="light_day">Denní režim (nad práh)</option>
                 </select>
             </div>
             <div class="row-input">
-                <span>Light Threshold (0-255)</span>
+                <span data-i18n="light_thr">Práh světla (0-255)</span>
                 <input type="number" id="i_light_thresh" placeholder="128" min="0" max="255" style="width:80px" onchange="saveLightConfig()">
             </div>
             <div class="row-input">
-                <span>Current Light</span>
+                <span data-i18n="light_cur">Aktuální světlo</span>
                 <span id="cur_light_val" style="font-weight:bold">---</span>
             </div>
             <p style="font-size:0.7rem; color:#666; margin:2px 0 0 0">
-                OUT pin active only when light is below/above threshold.<br>
-                Ideal for night security ("below threshold" mode).
+                <span data-i18n="light_hint">OUT pin aktivní jen když je světlo pod/nad prahem.<br>
+                Ideální pro noční zabezpečení (režim "pod práh").</span>
             </p>
         </div>
 
@@ -281,13 +442,13 @@ const char index_html[] PROGMEM = R"rawliteral(
             <div id="range_summary" style="font-size:0.8rem; color:#888; margin-bottom:8px; text-align:center"></div>
 
             <div style="font-size:0.75rem; color:#888; margin-bottom:8px; line-height:1.5">
-                <span style="color:#03dac6; font-weight:bold">&#9632; Movement</span> = sensitivity to moving objects &middot;
-                <span style="color:#bb86fc; font-weight:bold">&#9632; Static</span> = sensitivity to stationary objects<br>
+                <span style="color:#03dac6; font-weight:bold">&#9632; Pohyb</span> = citlivost na pohybující se objekty#9632; <span data-i18n="movement">Pohyb</span></span> = move sensitivity &middot;
+                <span style="color:#bb86fc; font-weight:bold">&#9632; Statika</span> = citlivost na nehybné objekty#9632; <span data-i18n="static_">Statika</span></span> = static sensitivity<br>
                 Higher = more sensitive &middot; <span style="opacity:0.4">gray = outside min/max range</span>
             </div>
 
             <div style="background:#111; border-radius:8px; padding:8px; margin-bottom:8px">
-                <div style="font-size:0.75rem; color:#888; margin-bottom:4px">Set all:</div>
+                <div style="font-size:0.75rem; color:#888; margin-bottom:4px"data-i18n="set_all">Nastavit vše:</div>
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
                     <span style="color:#03dac6; font-size:0.75rem; width:12px">P</span>
                     <input type="range" class="mov-slider" id="g_m_all" value="50" min="0" max="100" style="flex:1; min-width:60px" oninput="$('lm_all').innerText=this.value">
@@ -300,14 +461,14 @@ const char index_html[] PROGMEM = R"rawliteral(
             </div>
 
             <div style="display:flex; justify-content:space-between; margin-bottom:8px; gap:5px">
-                <button class="sec" style="flex:1; padding:5px; font-size:0.8rem" onclick="setPreset('indoor')">Indoor</button>
-                <button class="sec" style="flex:1; padding:5px; font-size:0.8rem" onclick="setPreset('outdoor')">Outdoor</button>
-                <button class="sec" style="flex:1; padding:5px; font-size:0.8rem" onclick="setPreset('pet')">Pets</button>
+                <button class="sec" style="flex:1; padding:5px; font-size:0.8rem" onclick="setPreset('indoor')"data-i18n="indoor">Interiér</button>
+                <button class="sec" style="flex:1; padding:5px; font-size:0.8rem" onclick="setPreset('outdoor')"data-i18n="outdoor">Exteriér</button>
+                <button class="sec" style="flex:1; padding:5px; font-size:0.8rem" onclick="setPreset('pet')"data-i18n="pets">Zvířata</button>
             </div>
 
             <div id="gates_container" style="max-height:400px; overflow-y:auto"></div>
 
-            <button onclick="saveGates()" style="margin-top:8px">Save Gates</button>
+            <button onclick="saveGates()" style="margin-top:8px"data-i18n="save_gates">Uložit Hradla</button>
         </div>
 
         <!-- TAB 3: NETWORK & CLOUD -->
@@ -323,7 +484,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <input type="text" id="txt_mqtt_user" placeholder="Username">
             </div>
             <input type="password" id="txt_mqtt_pass" placeholder="Password">
-            <button onclick="saveMQTTConfig()" class="sec">Save MQTT</button>
+            <button onclick="saveMQTTConfig()" class="sec"data-i18n="save_mqtt">Uložit MQTT</button>
 
             <div class="section-title">Telegram Notifications</div>
             <div style="display:flex; align-items:center; gap:8px;">
@@ -333,14 +494,14 @@ const char index_html[] PROGMEM = R"rawliteral(
             <input type="text" id="txt_tg_token" placeholder="Bot Token">
             <input type="text" id="txt_tg_chat" placeholder="Chat ID">
             <div style="display:flex; gap:5px">
-                <button onclick="saveTelegram()" class="sec">Save</button>
+                <button onclick="saveTelegram()" class="sec"data-i18n="save">Uložit</button>
                 <button onclick="testTelegram()" class="sec">Test</button>
             </div>
-            <div class="section-title">ACCESS CREDENTIALS</div>
+            <div class="section-title">CREDENTIALS</div>
             <input type="text" id="txt_auth_user" placeholder="Username">
             <input type="password" id="txt_auth_pass" placeholder="New Password">
             <input type="password" id="txt_auth_pass2" placeholder="Confirm Password">
-            <button onclick="saveAuth()" class="warn">Change Password</button>
+            <button onclick="saveAuth()" class="warn"data-i18n="change_pass">Změnit heslo</button>
         </div>
 
         <!-- TAB 4: ZONES -->
@@ -352,8 +513,8 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <div style="position:absolute; bottom:2px; left:4px; font-size:0.65rem; color:#555" id="zone_map_scale"></div>
             </div>
             <div id="zones_list"></div>
-            <button onclick="addZone()" class="sec" style="margin-top:10px">+ Add Zone</button>
-            <button onclick="saveZones()">💾 Save Zones</button>
+            <button onclick="addZone()" class="sec" style="margin-top:10px"data-i18n="add_zone">+ Přidat Zónu</button>
+            <button onclick="saveZones()"data-i18n="save_zones">💾 Uložit Zóny</button>
             <!-- Auto-learn -->
             <div style="background:#1a1a2e; border-radius:6px; padding:8px; margin-top:10px">
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
@@ -364,10 +525,10 @@ const char index_html[] PROGMEM = R"rawliteral(
                         <option value="600">10 min</option>
                         <option value="1800">30 min</option>
                         <option value="3600">60 min</option>
-                        <option value="14400">4 hrs</option>
-                        <option value="28800">8 hrs</option>
+                        <option value="14400">4h</option>
+                        <option value="28800">8h</option>
                     </select>
-                    <button onclick="startLearn()" id="btn_learn" class="sec" style="flex:1">📡 Learn Static</button>
+                    <button onclick="startLearn()" id="btn_learn" class="sec" style="flex:1"data-i18n="learn_static">📡 Naučit statiku</button>
                 </div>
                 <div id="learn_status" style="margin-top:6px; font-size:0.8rem; color:#888; display:none"></div>
             </div>
@@ -376,20 +537,20 @@ const char index_html[] PROGMEM = R"rawliteral(
         <!-- TAB 5: EVENT TIMELINE -->
         <div id="tab5" class="hidden">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px">
-                <div class="section-title" style="margin:0; border:none">EVENT TIMELINE</div>
+                <div class="section-title" style="margin:0; border:none"><span data-i18n="timeline_title">TIMELINE UDÁLOSTÍ</span></div>
                 <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap">
                     <span id="evt_total" style="font-size:0.75rem; color:#666"></span>
                     <select id="evt_filter" onchange="loadEvents()" style="width:auto; padding:4px 8px; font-size:0.8rem">
-                        <option value="-1">All</option>
-                        <option value="5">Alarm</option>
-                        <option value="1">Movement</option>
-                        <option value="2">Tamper</option>
-                        <option value="4">Heartbeat</option>
-                        <option value="0">System</option>
-                        <option value="3">Network</option>
+                        <option value="-1"data-i18n="filter_all">Vše</option>
+                        <option value="5"data-i18n="filter_alarm">Alarm</option>
+                        <option value="1"data-i18n="filter_move">Pohyb</option>
+                        <option value="2"data-i18n="filter_tamper">Tamper</option>
+                        <option value="4"data-i18n="filter_hb">Heartbeat</option>
+                        <option value="0"data-i18n="filter_sys">Systém</option>
+                        <option value="3"data-i18n="filter_net">Síť</option>
                     </select>
                     <button onclick="exportEvents()" class="sec" style="width:auto; padding:4px 8px; margin:0; font-size:0.8rem">CSV</button>
-                    <button onclick="clearEvents()" class="warn" style="width:auto; padding:4px 8px; margin:0; font-size:0.8rem">Delete</button>
+                    <button onclick="clearEvents()" class="warn" style="width:auto; padding:4px 8px; margin:0; font-size:0.8rem"data-i18n="delete">Smazat</button>
                 </div>
             </div>
             <!-- Timeline visual bar (last 24h density) -->
@@ -397,32 +558,32 @@ const char index_html[] PROGMEM = R"rawliteral(
                  style="width:100%; height:32px; background:#111; border-radius:4px; margin-bottom:8px">
             </svg>
             <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#555; margin:-4px 0 8px 0">
-                <span>-24h</span><span>-12h</span><span>now</span>
+                <span>-24h</span><span>-12h</span><spandata-i18n="now">nyní</span>
             </div>
             <!-- Event list -->
             <div id="evt_timeline_list" style="max-height:400px; overflow-y:auto"></div>
-            <button id="evt_load_more" onclick="loadMoreEvents()" class="sec" style="display:none; margin-top:8px; font-size:0.85rem">Load more...</button>
+            <button id="evt_load_more" onclick="loadMoreEvents()" class="sec" style="display:none; margin-top:8px; font-size:0.85rem"data-i18n="load_more">Načíst další...</button>
         </div>
 
         <!-- TAB 6: WIFI CSI -->
         <div id="tab6" class="hidden">
             <div id="csi_compiled_warn" style="display:none; padding:10px; background:#3a1010; border-left:3px solid var(--warn); margin-bottom:12px; font-size:0.85rem">
-                ⚠️ This firmware was not compiled with WiFi CSI support (missing <code>-D USE_CSI=1</code>). To enable, upload the <b>esp32_poe_csi</b> variant.
+                ⚠️ <span data-i18n="csi_warn">Tento firmware nebyl zkompilován s podporou WiFi CSI.</span>
             </div>
 
-            <div class="section-title">CSI STATUS</div>
-            <div class="stat-row"><span>Active</span><span id="csi_active_val" style="font-weight:bold">—</span></div>
+            <div class="section-title">STAV CSI</div>
+            <div class="stat-row"><spandata-i18n="csi_active">Aktivní</span><span id="csi_active_val" style="font-weight:bold">—</span></div>
             <div class="stat-row"><span>WiFi SSID</span><span id="csi_ssid_val">—</span></div>
             <div class="stat-row"><span>WiFi RSSI</span><span id="csi_rssi_val">—</span></div>
-            <div class="stat-row"><span>Packets/s</span><span id="csi_pps_val">—</span></div>
-            <div class="stat-row"><span>Idle baseline ready</span><span id="csi_idle_val">—</span></div>
+            <div class="stat-row"><span>Pakety/s</span><span id="csi_pps_val">—</span></div>
+            <div class="stat-row"><spandata-i18n="csi_idle">Idle baseline připraven</span><span id="csi_idle_val">—</span></div>
 
-            <div class="section-title">MOTION DETECTION</div>
+            <div class="section-title">DETEKCE POHYBU</div>
             <div class="stat-row">
-                <span>Motion State</span>
+                <spandata-i18n="motion_state">Stav pohybu</span>
                 <span id="csi_motion_val" style="font-weight:bold; font-size:1.2rem">—</span>
             </div>
-            <div class="stat-row"><span>Composite Score</span><span id="csi_comp_val">—</span></div>
+            <div class="stat-row"><spandata-i18n="composite">Composite skóre</span><span id="csi_comp_val">—</span></div>
             <div class="stat-row"><span>Variance (window)</span><span id="csi_var_val">—</span></div>
             <svg id="csi_graph" viewBox="0 0 100 50" style="width:100%; height:60px; background:#1a1a1a; margin-top:5px; stroke:#03dac6"></svg>
 
@@ -432,58 +593,76 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <span id="fus_presence_val" style="font-weight:bold; font-size:1.2rem">—</span>
             </div>
             <div class="stat-row"><span>Confidence</span><span id="fus_conf_val">—</span></div>
-            <div class="stat-row"><span>Zdroj detekce</span><span id="fus_source_val">—</span></div>
+            <div class="stat-row"><spandata-i18n="detection_src">Zdroj detekce</span><span id="fus_source_val">—</span></div>
             <div class="stat-row">
-                <span>Fusion povoleno</span>
+                <spandata-i18n="fusion_enabled">Fusion povoleno</span>
                 <label class="switch"><input type="checkbox" id="fus_en" onchange="toggleFusion(this.checked)"><span class="slider"></span></label>
             </div>
 
-            <div class="section-title">KONFIGURACE</div>
+            <div class="section-title"><span data-i18n="config">KONFIGURACE</span></div>
 
             <div class="stat-row">
-                <span>Povoleno</span>
+                <spandata-i18n="enabled">Povoleno</span>
                 <label class="switch"><input type="checkbox" id="csi_en"><span class="slider"></span></label>
             </div>
 
             <label style="display:block; margin-top:10px; font-size:0.85rem; color:#aaa">
-                Detection threshold (variance): <span id="csi_thr_lbl">0.50</span>
+                <span data-i18n="threshold_label">Práh detekce (variance threshold):</span> <span id="csi_thr_lbl">0.50</span>
             </label>
             <input type="range" id="csi_thr" min="0.01" max="3.0" step="0.01" value="0.5"
                    oninput="$('csi_thr_lbl').innerText=parseFloat(this.value).toFixed(2)">
 
             <label style="display:block; margin-top:10px; font-size:0.85rem; color:#aaa">
-                Hystereze (exit multiplier): <span id="csi_hyst_lbl">0.70</span>
+                <span data-i18n="hysteresis">Hystereze (exit multiplier):</span> <span id="csi_hyst_lbl">0.70</span>
             </label>
             <input type="range" id="csi_hyst" min="0.30" max="0.95" step="0.01" value="0.7"
                    oninput="$('csi_hyst_lbl').innerText=parseFloat(this.value).toFixed(2)">
 
             <label style="display:block; margin-top:10px; font-size:0.85rem; color:#aaa">
-                Velikost okna (vzorky): <span id="csi_win_lbl">75</span>
+                <span data-i18n="window_size">Velikost okna (vzorky):</span> <span id="csi_win_lbl">75</span>
             </label>
             <input type="range" id="csi_win" min="10" max="200" step="5" value="75"
                    oninput="$('csi_win_lbl').innerText=this.value">
 
             <label style="display:block; margin-top:10px; font-size:0.85rem; color:#aaa">
-                Interval publikace (ms): <span id="csi_pub_lbl">1000</span>
+                <span data-i18n="pub_interval">Interval publikace (ms):</span> <span id="csi_pub_lbl">1000</span>
             </label>
             <input type="range" id="csi_pub" min="200" max="5000" step="100" value="1000"
                    oninput="$('csi_pub_lbl').innerText=this.value">
 
-            <button onclick="saveCSIConfig()" style="margin-top:12px">Save Configuration</button>
+            <div class="section-title" style="margin-top:14px">TRAFFIC GENERATOR</div>
+            <div class="stat-row">
+                <spandata-i18n="tgen_mode">Režim</span>
+                <select id="csi_tmode" style="width:auto; padding:4px 8px" onchange="$('csi_udp_port_row').style.display=this.value==='udp'?'flex':'none'">
+                    <option value="udp">UDP</option>
+                    <option value="icmp">ICMP Ping</option>
+                </select>
+            </div>
+            <div id="csi_udp_port_row" class="stat-row">
+                <spandata-i18n="tgen_port">Cílový port</span>
+                <input type="number" id="csi_tport" value="7" min="1" max="65535" style="width:80px">
+            </div>
+            <label style="display:block; margin-top:8px; font-size:0.85rem; color:#aaa">
+                <span data-i18n="tgen_pps">Paketů/s (PPS):</span> <span id="csi_pps_lbl">100</span>
+            </label>
+            <input type="range" id="csi_tpps" min="10" max="500" step="10" value="100"
+                   oninput="$('csi_pps_lbl').innerText=this.value">
 
-            <div class="section-title">AKCE</div>
+            <button onclick="saveCSIConfig()" style="margin-top:12px"data-i18n="save_config">Uložit konfiguraci</button>
+
+            <div class="section-title" data-i18n="actions">AKCE</div>
             <div style="display:flex; flex-wrap:wrap; gap:6px">
-                <button class="sec" style="flex:1; min-width:120px" onclick="csiCalibrate()">📐 Auto-kalibrace prahu (10s)</button>
-                <button class="sec" style="flex:1; min-width:120px" onclick="csiResetBaseline()">♻️ Reset idle baseline</button>
-                <button class="sec" style="flex:1; min-width:120px" onclick="csiReconnect()">📶 Reconnect WiFi</button>
+                <button class="sec" style="flex:1; min-width:120px" onclick="csiCalibrate()"data-i18n="auto_calib">📐 Auto-kalibrace prahu (10s)</button>
+                <button class="sec" style="flex:1; min-width:120px" onclick="csiResetBaseline()"data-i18n="reset_baseline">♻️ Reset idle baseline</button>
+                <button class="sec" style="flex:1; min-width:120px" onclick="csiReconnect()"data-i18n="reconnect_wifi">📶 Reconnect WiFi</button>
             </div>
             <div id="csi_calib_bar" style="display:none; height:6px; background:#333; margin-top:8px; border-radius:3px; overflow:hidden">
                 <div id="csi_calib_fill" style="height:100%; width:0%; background:var(--accent); transition:width 0.3s"></div>
             </div>
             <div style="font-size:0.75rem; color:#777; margin-top:8px">
-                <b>Auto-calibration:</b> 10 seconds variance sampling in idle, sets threshold = mean × 1.5. Use when room is empty.<br>
-                <b>Reset baseline:</b> clears learned idle values (turbulence, phase). After moving the sensor.<br>
-                <b>Reconnect WiFi:</b> restarts WiFi association to fix interruptions / RSSI drops.
+                <b>Auto-kalibrace:</b> 10 sekund vzorkuje variance v klidu, nastaví práh = mean × 1.5. Použij když je v místnosti nikdo.<br>
+                <b>Reset baseline:</b> vyčistí naučené idle hodnoty (turbulence, fáze). Po přesunu senzoru.<br>
+                <b>Reconnect WiFi:</b> přerušení / RSSI dropy řeší restart asociace.
             </div>
         </div>
     </div>
@@ -493,11 +672,11 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div class="stat-row"><span>Aktualizace FW</span></div>
         <input type="file" id="fw_file" accept=".bin">
         <div id="ota_bar" style="height:5px; background:#333; margin-top:5px; width:0%; transition:width 0.2s; background:var(--accent)"></div>
-        <button onclick="uploadFW()">Upload Firmware</button>
+        <button onclick="uploadFW()"data-i18n="upload_fw">Nahrát Firmware</button>
     </div>
   </div>
 
-  <div id="toast">Saved</div>
+  <div id="toast" data-i18n="saved">Uloženo</div>
 
 <script>
 // --- CORE ---
@@ -545,7 +724,7 @@ function connectSSE() {
     evtSource.onerror = () => {
         console.log('SSE connection lost, reconnecting in 3s...');
         $('sse_icon').className = 'icon err';
-        $('sse_icon').title = 'Connection lost';
+        $('sse_icon').title = t('conn_lost');
         evtSource.close();
         if (reconnectTimeout) clearTimeout(reconnectTimeout);
         reconnectTimeout = setTimeout(connectSSE, 3000);
@@ -600,7 +779,7 @@ function loadMainConfig() {
         // Range summary
         let minDist = (cfgMinGate * gateResolution * 100).toFixed(0);
         let maxDist = (cfgMaxGate * gateResolution * 100).toFixed(0);
-        $('range_summary').innerHTML = `Coverage: <b>${minDist}cm – ${maxDist}cm</b> &middot; Resolution: ${gateResolution}m/gate`;
+        $('range_summary').innerHTML = `${t('coverage')}: <b>${minDist}cm – ${maxDist}cm</b> &middot; ${t('resolution')}: ${gateResolution}m/${t('gate')}`;
 
         // Gate Sliders (no energy bars — eng mode broken on V1.26)
         renderGateSliders(d.mov_sens, d.stat_sens);
@@ -625,8 +804,8 @@ function updateUI(d) {
     let st = "KLID";
     let stColor = "#888";
     if(d.state === "detected") { st = "DETEKCE"; stColor = "var(--accent)"; }
-    else if(d.state === "hold") { st = "HOLD"; stColor = "#bb86fc"; }
-    if(d.tamper) { st = "TAMPER!"; stColor = "var(--warn)"; }
+    else if(d.state === "hold") { st = t('hold_state'); stColor = "#bb86fc"; }
+    if(d.tamper) { st = t('tamper_state'); stColor = "var(--warn)"; }
     $('state_text').innerText = st;
     $('state_text').style.color = stColor;
     drawZoneMap(d.raw_stat_dist, d.raw_mov_dist);
@@ -642,9 +821,9 @@ function renderGateSliders(mov, stat) {
         let s = stat ? stat[i] : 30;
         h += `<div class="gate-wrapper${dimClass}">
             <div class="gate-label" style="width:65px; white-space:nowrap">G${i} <span style="color:#666">(${dist}cm)</span></div>
-            <input type="range" class="mov-slider" id="g_m_${i}" value="${m}" min="0" max="100" title="Move G${i}" oninput="$('lm_${i}').innerText=this.value" style="flex:1">
+            <input type="range" class="mov-slider" id="g_m_${i}" value="${m}" min="0" max="100" title="Pohyb G${i}" oninput="$('lm_${i}').innerText=this.value" style="flex:1">
             <span id="lm_${i}" style="width:22px; text-align:right; color:#03dac6; font-size:0.75rem">${m}</span>
-            <input type="range" class="stat-slider" id="g_s_${i}" value="${s}" min="0" max="100" title="Static G${i}" oninput="$('ls_${i}').innerText=this.value" style="flex:1">
+            <input type="range" class="stat-slider" id="g_s_${i}" value="${s}" min="0" max="100" title="Statika G${i}" oninput="$('ls_${i}').innerText=this.value" style="flex:1">
             <span id="ls_${i}" style="width:22px; text-align:right; color:#bb86fc; font-size:0.75rem">${s}</span>
         </div>`;
     }
@@ -745,16 +924,27 @@ function loadCSIConfig() {
             $('csi_pub_lbl').innerText = d.publish_ms;
         }
 
+        // Traffic gen config
+        if (d.traffic_icmp !== undefined) {
+            $('csi_tmode').value = d.traffic_icmp ? 'icmp' : 'udp';
+            $('csi_udp_port_row').style.display = d.traffic_icmp ? 'none' : 'flex';
+        }
+        if (d.traffic_port !== undefined) $('csi_tport').value = d.traffic_port;
+        if (d.traffic_pps !== undefined) {
+            $('csi_tpps').value = d.traffic_pps;
+            $('csi_pps_lbl').innerText = d.traffic_pps;
+        }
+
         // Live status
         $('csi_active_val').innerText = d.active ? 'ANO' : 'NE';
         $('csi_active_val').style.color = d.active ? 'var(--accent)' : '#888';
         $('csi_ssid_val').innerText  = d.wifi_ssid || '—';
         $('csi_rssi_val').innerText  = (d.wifi_rssi !== undefined && d.wifi_rssi !== 0) ? (d.wifi_rssi + ' dBm') : '—';
         $('csi_pps_val').innerText   = (d.pps !== undefined) ? d.pps.toFixed(1) : '—';
-        $('csi_idle_val').innerText  = d.idle_ready ? 'YES' : 'NO — collecting samples';
+        $('csi_idle_val').innerText  = d.idle_ready ? t('yes') : t('no_collecting');
 
         if (d.motion !== undefined) {
-            $('csi_motion_val').innerText = d.motion ? 'POHYB' : 'KLID';
+            $('csi_motion_val').innerText = d.motion ? t('motion') : t('idle');
             $('csi_motion_val').style.color = d.motion ? 'var(--accent)' : '#888';
         }
         if (d.composite !== undefined) $('csi_comp_val').innerText = d.composite.toFixed(4);
@@ -829,9 +1019,12 @@ function saveCSIConfig() {
     p.append('hysteresis', $('csi_hyst').value);
     p.append('window',     $('csi_win').value);
     p.append('publish_ms', $('csi_pub').value);
+    p.append('traffic_icmp', $('csi_tmode').value === 'icmp' ? '1' : '0');
+    p.append('traffic_port', $('csi_tport').value);
+    p.append('traffic_pps', $('csi_tpps').value);
     api('csi', {method:'POST', body:p}).then(r=>r.json()).then(d => {
         if (d.needs_restart) {
-            if (confirm('Changing CSI requires ESP restart. Restart now?')) {
+            if (confirm(t('csi_restart'))) {
                 api('restart', {method:'POST'});
             }
         }
@@ -840,12 +1033,12 @@ function saveCSIConfig() {
 
 function csiCalibrate() {
     api('csi/calibrate', {method:'POST'}).then(r => {
-        if (r.ok) showToast('Calibration started (10s, keep room empty)');
+        if (r.ok) showToast(t('calib_started'));
     });
 }
 
 function csiResetBaseline() {
-    if (!confirm('Reset idle baseline? CSI will re-collect samples for a few seconds.')) return;
+    if (!confirm(t('reset_confirm'))) return;
     api('csi/reset_baseline', {method:'POST'});
 }
 
@@ -888,7 +1081,7 @@ function renderTimelineBar(events) {
             }
         }
     });
-    if (!hasBins) { $('evt_timeline').innerHTML = '<text x="144" y="20" text-anchor="middle" fill="#444" font-size="10">Not enough data for timeline</text>'; return; }
+    if (!hasBins) { $('evt_timeline').innerHTML = '<text x="144" y="20" text-anchor="middle" fill="#444" font-size="10"><tspan data-i18n="no_timeline">Nedostatek dat pro timeline</tspan></text>'; return; }
     for (let i = 0; i < 288; i++) if (bins[i] > maxBin) maxBin = bins[i];
 
     let svg = '';
@@ -941,7 +1134,7 @@ function loadEvents() {
     fetch(url).then(r=>r.json()).then(d => {
         let events = d.events || [];
         let total = d.total || 0;
-        $('evt_total').textContent = total + ' total';
+        $('evt_total').textContent = total + ' ' + t('total');
         renderTimelineBar(events);
         renderEventList(events, false);
         evtOffset = events.length;
@@ -966,13 +1159,13 @@ function exportEvents() {
 }
 
 function clearEvents() {
-    if(confirm("Delete entire history?")) {
+    if(confirm(t('del_history'))) {
         api('events/clear', {method:'POST'}).then(() => loadEvents());
     }
 }
 
 function startCalib() {
-    if(confirm("Start noise calibration? (60s, do not move in front of sensor)")) {
+    if(confirm(t('noise_calib'))) {
         api('radar/calibrate', {method:'POST'});
     }
 }
@@ -1121,7 +1314,7 @@ function testTelegram() {
     fetch('/api/telegram/test', {method:'POST'})
     .then(r => r.json())
     .then(d => {
-        showToast(d.success ? "Telegram OK!" : "Error: " + (d.error || "Unknown"));
+        showToast(d.success ? "Telegram OK!" : t('tg_error') + ": " + (d.error || t('tg_unknown')));
     })
     .catch(e => showToast("Chyba komunikace"));
 }
@@ -1137,7 +1330,7 @@ function renderZones() {
         const ab = z.alarm_behavior ?? 0;
         h += `<div style="margin-bottom:5px; background:#222; padding:5px; border-radius:5px; border-left:3px solid ${ZONE_COLORS[ab]||'#444'}">
             <div style="display:flex; gap:5px; margin-bottom:5px">
-                <input type="text" value="${z.name}" id="z_name_${i}" style="flex:2" placeholder="Name">
+                <input type="text" value="${z.name}" id="z_name_${i}" style="flex:2" placeholder="Název">
                 <input type="number" value="${z.min}" id="z_min_${i}" style="flex:1" placeholder="Od (cm)">
                 <input type="number" value="${z.max}" id="z_max_${i}" style="flex:1" placeholder="Do (cm)">
             </div>
@@ -1148,13 +1341,13 @@ function renderZones() {
                     <option value="2" ${z.level==2?'selected':''}>Warn</option>
                     <option value="3" ${z.level==3?'selected':''}>ALARM</option>
                 </select>
-                <select id="z_ab_${i}" style="flex:2" title="Zone alarm behavior">
+                <select id="z_ab_${i}" style="flex:2" title="Chování alarmu v zóně">
                     <option value="0" ${ab==0?'selected':''}>⏱ Entry delay</option>
-                    <option value="1" ${ab==1?'selected':''}>🚨 Immediate</option>
+                    <option value="1" ${ab==1?'selected':''}>🚨 Okamžité</option>
                     <option value="2" ${ab==2?'selected':''}>🔕 Ignorovat</option>
                     <option value="3" ${ab==3?'selected':''}>📡 Ignorovat statiku</option>
                 </select>
-                <input type="number" value="${z.delay||0}" id="z_del_${i}" style="flex:1" placeholder="Delay (ms)">
+                <input type="number" value="${z.delay||0}" id="z_del_${i}" style="flex:1" placeholder="Zpoždění (ms)">
                 <input type="checkbox" id="z_en_${i}" ${z.enabled!==false?'checked':''} style="width:auto">
                 <button onclick="delZone(${i})" class="warn" style="width:auto; margin:0; padding:5px 10px">×</button>
             </div>
@@ -1164,7 +1357,7 @@ function renderZones() {
     drawZoneMap();
 }
 function addZone() {
-    zones.push({name: "Zone " + (zones.length+1), min: 0, max: 100, level: 0, alarm_behavior: 0, delay: 0, enabled: true});
+    zones.push({name: t('zone_default') + " " + (zones.length+1), min: 0, max: 100, level: 0, alarm_behavior: 0, delay: 0, enabled: true});
     renderZones();
 }
 function delZone(i) {
@@ -1190,8 +1383,8 @@ function saveZones() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(zones)
     }).then(r => {
-        if(r.ok) showToast("Zones saved");
-        else showToast("Save error");
+        if(r.ok) showToast(t('zones_saved'));
+        else showToast(t('save_error'));
     });
 }
 
@@ -1231,7 +1424,7 @@ function startLearn() {
         if (r.ok) {
             $('btn_learn').disabled = true;
             $('learn_status').style.display = 'block';
-            $('learn_status').innerText = 'Starting...';
+            $('learn_status').innerText = t('starting');
             learnPollTimer = setInterval(pollLearn, 3000);
         }
     });
@@ -1244,20 +1437,20 @@ function pollLearn() {
             $('btn_learn').disabled = false;
             let txt = `✅ Hotovo! Top gate: ${d.top_gate} (~${d.top_cm}cm), confidence: ${d.confidence}%`;
             if (d.suggest_ready) {
-                txt += ` <button onclick="applyLearnZone(${d.suggest_min_cm},${d.suggest_max_cm})" class="sec" style="padding:2px 8px; margin-left:6px">Apply</button>`;
+                txt += ` <button onclick="applyLearnZone(${d.suggest_min_cm},${d.suggest_max_cm})" class="sec" style="padding:2px 8px; margin-left:6px">Použít</button>`;
             } else {
-                txt += ' ⚠️ Not enough data.';
+                txt += ' ⚠️ t('not_enough')';
             }
             stat.innerHTML = txt;
         } else {
-            stat.innerText = `⏳ ${d.progress}% | Static: ${d.static_freq_pct}% | Top gate: ${d.top_gate} (~${d.top_cm}cm)`;
+            stat.innerText = `⏳ ${d.progress}% | t('static_label') + ': ' + d.static_freq_pct + '% | Top gate: ${d.top_gate} (~${d.top_cm}cm)`;
         }
     });
 }
 function applyLearnZone(minCm, maxCm) {
-    zones.push({name: 'Static-auto', min: minCm, max: maxCm, level: 0, alarm_behavior: 3, delay: 0, enabled: true});
+    zones.push({name: t('static_label')+'-auto', min: minCm, max: maxCm, level: 0, alarm_behavior: 3, delay: 0, enabled: true});
     renderZones();
-    $('learn_status').innerHTML += ' &nbsp;<b>→ Zone added, don't forget to save!</b>';
+    $('learn_status').innerHTML += ' &nbsp;<b>' + t('zone_added') + '</b>';
 }
 
 function saveGates() {
@@ -1271,14 +1464,14 @@ function saveGates() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({mov, stat})
     }).then(r => {
-        if(r.ok) showToast("Gates saved");
-        else showToast("Error saving gates");
+        if(r.ok) showToast(t('gates_saved'));
+        else showToast(t('gates_error'));
     });
 }
 function setPreset(t) {
     fetch('/api/preset?name=' + t, {method:'POST'}).then(r => {
         if(!r.ok) { showToast("Chyba presetu"); return; }
-        showToast("Preset " + t + " applied");
+        showToast(t('preset_applied') + " (" + t + ")");
         // Re-fetch config and update sliders in-place (no reload)
         fetch('/api/config').then(r=>r.json()).then(d => {
             if(d.mov_sens && d.stat_sens) renderGateSliders(d.mov_sens, d.stat_sens);
@@ -1301,7 +1494,7 @@ function uploadFW() {
     let xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/update');
     xhr.upload.onprogress = e => $('ota_bar').style.width = (e.loaded/e.total*100) + "%";
-    xhr.onload = () => alert("Restarting...");
+    xhr.onload = () => alert(t('restarting'));
     xhr.send(fd);
 }
 
@@ -1319,11 +1512,11 @@ function loadAlarmStatus() {
 function updateAlarmUI(state) {
     let badge = $('alarm_badge');
     let btn = $('btn_arm');
-    if(state === 'disarmed') { badge.innerText = '🔓 DISARMED'; badge.style.color='#888'; btn.innerText='ARM'; btn.style.background='#b00020'; }
-    else if(state === 'arming') { badge.innerText = '⏳ ARMING...'; badge.style.color='orange'; btn.innerText='CANCEL'; btn.style.background='#3700b3'; }
-    else if(state === 'armed_away') { badge.innerText = '🔒 ARMED'; badge.style.color='#00ff00'; btn.innerText='DISARM'; btn.style.background='#3700b3'; }
-    else if(state === 'pending') { badge.innerText = '⚠️ PENDING'; badge.style.color='orange'; btn.innerText='DISARM'; btn.style.background='#3700b3'; }
-    else if(state === 'triggered') { badge.innerText = '🚨 TRIGGERED'; badge.style.color='red'; btn.innerText='DISARM'; btn.style.background='#3700b3'; }
+    if(state === 'disarmed') { badge.innerText = t('disarmed'); badge.style.color='#888'; btn.innerText=t('arm'); btn.style.background='#b00020'; }
+    else if(state === 'arming') { badge.innerText = t('arming'); badge.style.color='orange'; btn.innerText=t('disarm'); btn.style.background='#3700b3'; }
+    else if(state === 'armed_away') { badge.innerText = t('armed'); badge.style.color='#00ff00'; btn.innerText=t('disarm'); btn.style.background='#3700b3'; }
+    else if(state === 'pending') { badge.innerText = t('pending'); badge.style.color='orange'; btn.innerText=t('disarm'); btn.style.background='#3700b3'; }
+    else if(state === 'triggered') { badge.innerText = t('triggered'); badge.style.color='red'; btn.innerText=t('disarm'); btn.style.background='#3700b3'; }
 }
 function toggleArm() {
     if(alarmArmed) {
@@ -1346,14 +1539,14 @@ function saveAuth() {
     let u = $('txt_auth_user').value;
     let p = $('txt_auth_pass').value;
     let p2 = $('txt_auth_pass2').value;
-    if(!u || !p) { showToast("Enter username and password"); return; }
-    if(p !== p2) { showToast("Passwords don't match"); return; }
+    if(!u || !p) { showToast(t('enter_creds')); return; }
+    if(p !== p2) { showToast(t('pass_mismatch')); return; }
     if(u.length < 4 || p.length < 4) { showToast("Min. 4 znaky"); return; }
 
     fetch(`/api/auth/config?user=${encodeURIComponent(u)}&pass=${encodeURIComponent(p)}`, {
         method: 'POST'
     }).then(r => {
-        if(r.ok) { showToast("Password changed"); alert("Credentials changed. Device will restart."); }
+        if(r.ok) { showToast(t('pass_changed')); alert(t('creds_changed')); }
         else r.text().then(t => showToast(t || "Chyba"));
     });
 }
