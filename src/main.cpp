@@ -858,7 +858,7 @@ void setup() {
         bootMsg += "FW: " + String(FW_VERSION) + "\n";
         bootMsg += "IP: " + ETH.localIP().toString() + "\n";
         if (g_prevRestartCause == "eth_link_lost") {
-            bootMsg += "⚠️ *Restart reason: ETH link was lost >5min*";
+            bootMsg += "⚠️ *Restart reason: ETH link lost >5min*";
         } else if (g_prevRestartCause != "none") {
             bootMsg += "ℹ️ Restart: " + g_prevRestartCause;
         }
@@ -1171,12 +1171,15 @@ void loop() {
     static bool dmsDegraded = false;
     static bool dmsReconnectPending = false;
     static unsigned long dmsReconnectTime = 0;
+    unsigned long dmsPublishAge = (unsigned long)(now - mqttService.getLastPublishTime());
+    // Guard against millis() overflow: if age > 30 days, it's clearly wrap-around, not real staleness
+    bool dmsPublishStale = (dmsPublishAge > TIMEOUT_DMS_NO_PUBLISH_MS) && (dmsPublishAge < 2592000000UL);
     if (!dmsDegraded && configManager.getConfig().mqtt_enabled && strlen(configManager.getConfig().mqtt_server) > 0 && (now - bootTime) > TIMEOUT_DMS_STARTUP_MS &&
-        (unsigned long)(now - mqttService.getLastPublishTime()) > TIMEOUT_DMS_NO_PUBLISH_MS) {
+        dmsPublishStale) {
 
         if (!dmsReconnectPending) {
             // Phase 1: Try MQTT reconnect first before restarting ESP
-            unsigned long publishAge = (now - mqttService.getLastPublishTime()) / 1000;
+            unsigned long publishAge = dmsPublishAge / 1000;
             DBG("SYSTEM", "DMS: No publish for %lus, connected=%d — forcing MQTT reconnect",
                 publishAge, mqttService.connected());
             systemLog.error("DMS: publish stale " + String(publishAge) + "s — reconnecting MQTT");
@@ -1185,7 +1188,8 @@ void loop() {
             dmsReconnectTime = now;
         } else if ((now - dmsReconnectTime) > 60000) {
             // Phase 2: 60s after reconnect — check if publish recovered
-            if ((unsigned long)(now - mqttService.getLastPublishTime()) > TIMEOUT_DMS_NO_PUBLISH_MS) {
+            unsigned long phase2Age = (unsigned long)(now - mqttService.getLastPublishTime());
+            if (phase2Age > TIMEOUT_DMS_NO_PUBLISH_MS && phase2Age < 2592000000UL) {
                 if (dmsRestarts < DMS_MAX_RESTARTS) {
                     dmsRestarts++;
                     preferences.putUInt("dms_count", dmsRestarts);
@@ -1202,12 +1206,11 @@ void loop() {
                 dmsReconnectPending = false;
             }
         }
-    } else if (dmsReconnectPending && (unsigned long)(now - mqttService.getLastPublishTime()) < TIMEOUT_DMS_NO_PUBLISH_MS) {
+    } else if (dmsReconnectPending && !dmsPublishStale) {
         dmsReconnectPending = false;
     }
     // Reset DMS counter after successful publish
-    if (dmsRestarts > 0 && mqttService.getLastPublishTime() > 0 &&
-        (unsigned long)(now - mqttService.getLastPublishTime()) < TIMEOUT_DMS_NO_PUBLISH_MS) {
+    if (dmsRestarts > 0 && mqttService.getLastPublishTime() > 0 && !dmsPublishStale) {
         preferences.putUInt("dms_count", 0);
         dmsRestarts = 0;
         if (dmsDegraded) {

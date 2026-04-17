@@ -182,6 +182,7 @@ void MQTTService::connect() {
 
     if (_mqttClient.connect(_deviceId, _user, _pass, _topics.availability, 1, true, "offline")) {
         DBG("MQTT", "Connected!");
+        _lastPublish = millis();  // Reset DMS timer on connect (prevents overflow loop)
         _mqttClient.publish(_topics.availability, "online", true);
         _mqttClient.publish(_topics.radar_type, "ld2412", true);
 
