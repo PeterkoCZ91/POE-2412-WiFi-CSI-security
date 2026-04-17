@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.5.1-poe-wifi] - 2026-04-18
+
+### Added
+- **Fusion → alarm** — CSI-only presence can trigger ARMED→PENDING→TRIGGERED; radar false positives suppressed when CSI disagrees (fusion moved before alarm logic)
+- **Auto-zones from learning** — `POST /api/radar/apply-learn` creates ignore_static_only zone from reflector learn results with overlap detection
+- **Event timeline UI** — 24h density heatmap, type filtering, pagination, CSV export button
+- **CZ/EN language toggle** — i18n dictionary with `t()` helper and `data-i18n` attributes; language persisted in localStorage; eliminates need for separate repo copies
+- **Traffic generator tuning** — configurable target port (`traffic_port`), ICMP ping mode (`traffic_icmp`), PPS rate (`traffic_pps`) via `/api/csi` POST; GUI controls in CSI tab
+- **Multi-sensor mesh verification** — MQTT-based peer alarm cross-validation with 5s confirm window
+- **Supervision heartbeat** — 60s peer alive publish, 3min offline alert with tamper notification
+- **GUI screenshots** — docs/screenshots/ with anonymized dashboard captures
+
+### Fixed
+- **DMS millis() overflow** — after ~49.7 days uptime, `(now - _lastPublish)` wraps to UINT32_MAX causing infinite MQTT reconnect loop; added overflow guard (ignore age > 30 days) and reset `_lastPublish` on MQTT connect
+- **OTA delay** — 500ms delay before reboot so HTTP response passes through nginx proxy (fixes 502)
+- **Event API parsing** — frontend read events as flat array but API returns `{events:[...], total, ...}` object
+- **CSV export** — `doc.as<JsonArray>()` → `doc["events"].as<JsonArray>()`
+
+### Changed
+- Alarm notifications now show fusion source (radar/csi/both)
+- CSI-only alarm uses entry delay (behavior=0) with zone="csi_only"
+
 ## [4.2.0-poe-wifi] - 2026-04-13
 
 ### Added

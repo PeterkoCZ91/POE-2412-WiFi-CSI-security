@@ -3,14 +3,14 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/MCU-ESP32--WROOM--32-blue?logo=espressif)](https://www.espressif.com/)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.2.0--poe--wifi-blue)]()
+[![Version](https://img.shields.io/badge/Version-4.5.1--poe--wifi-blue)]()
 
 **Dual-sensor intrusion detection system** — ESP32 + HLK-LD2412 24 GHz mmWave radar + **WiFi CSI (Channel State Information) passive motion detection** over **wired Ethernet with Power over Ethernet**. Full alarm state machine, zone management, Home Assistant integration, Telegram bot, and a dark-mode web dashboard. No cloud required.
 
 WiFi CSI detection algorithms based on [ESPectre](https://github.com/francescopace/espectre) by Francesco Pace (GPLv3).
 
 > [!TIP]
-> **New in v4.2.0** — WiFi CSI with Hampel filter, CV normalization, DNS traffic generator (100 pps), breathing-aware presence hold. Entry/exit path validation ported from v3.11.0.
+> **New in v4.5.1** — Fusion-driven alarm (CSI-only triggers alarm, radar FP suppressed), auto-zones from reflector learning, CZ/EN language toggle, event timeline with 24h heatmap, configurable traffic generator (UDP/ICMP/PPS), multi-sensor mesh verification, DMS overflow fix.
 
 ---
 
@@ -224,7 +224,7 @@ Default credentials: `admin` / `admin` — **change immediately** in the Network
 | Composite score | Weighted blend (0.35 turb + 0.25 phase + 0.20 ratio + 0.20 breath) |
 | Hampel filter | MAD-based outlier removal (window=7, threshold=5.0) |
 | Low-pass filter | 1st-order Butterworth IIR at 11 Hz cutoff |
-| Traffic generator | DNS UDP queries to gateway at 100 pps (FreeRTOS task) |
+| Traffic generator | UDP or ICMP ping to gateway, configurable port and PPS (10-500) |
 | Breathing hold | Overrides IDLE when breathing/phase suggest stationary person |
 | HT20/11n forcing | Consistent 64 subcarriers, guard-band-aware selection |
 | STBC handling | Collapsed doubled packets (256→128 bytes) |
@@ -242,7 +242,9 @@ Default credentials: `admin` / `admin` — **change immediately** in the Network
 | Loitering alerts | Sustained close-range presence notification |
 | Heartbeat | Periodic "I'm alive" report |
 | Event log | LittleFS-backed, paginated API, CSV export |
-| Supervision | Heartbeat + mesh peer verification |
+| Supervision | Heartbeat + mesh peer verification (60s alive, 3min timeout) |
+| Mesh verification | Cross-node alarm confirmation via MQTT (5s window) |
+| Fusion alarm | CSI-only can trigger alarm; radar FP suppressed by CSI |
 | Offline buffer | MQTT messages queued to LittleFS during network outage |
 
 ### System
@@ -251,7 +253,7 @@ Default credentials: `admin` / `admin` — **change immediately** in the Network
 |---------|-------------|
 | OTA | Firmware update with automatic rollback on failure |
 | Config snapshot | NVS backup before OTA flash |
-| Web dashboard | Dark-mode GUI with SSE real-time telemetry |
+| Web dashboard | Dark-mode GUI with SSE real-time telemetry, CZ/EN toggle |
 | LittleFS assets | Hot-swap web UI without reflash |
 | Static IP | Optional fixed IP configuration |
 | Chip temperature | MQTT + Telegram alerts on thermal events |
@@ -299,9 +301,15 @@ POE-2412-WiFi-CSI-security/
 
 The embedded web dashboard provides real-time telemetry, alarm control, zone management, gate sensitivity tuning, and WiFi CSI configuration — all in a dark-mode responsive UI.
 
-**Tabs:** Basic | Security | Gates | Network & Cloud | Zones | WiFi CSI
+**Tabs:** Basic | Security | Gates | Network & Cloud | Zones | Events | WiFi CSI
 
-The CSI tab shows live turbulence, composite score, packet rate, and provides auto-calibration and baseline reset controls.
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Security](docs/screenshots/security.png) |
+| ![Gates](docs/screenshots/gates.png) | ![Zones](docs/screenshots/zones.png) |
+| ![Events](docs/screenshots/events.png) | ![CSI Fusion](docs/screenshots/csi-fusion.png) |
+
+The CSI tab shows live turbulence, composite score, packet rate, traffic generator controls (UDP/ICMP/PPS), and provides auto-calibration and baseline reset. The Events tab features a 24h activity heatmap with type filtering and CSV export. CZ/EN language toggle in header.
 
 ---
 
@@ -343,6 +351,11 @@ The CSI tab shows live turbulence, composite score, packet rate, and provides au
 | POST | `/api/csi/calibrate` | Auto-calibrate CSI threshold |
 | POST | `/api/csi/reset_baseline` | Reset CSI idle baselines |
 | POST | `/api/csi/reconnect` | Force WiFi reconnect for CSI |
+| POST | `/api/radar/apply-learn` | Auto-create ignore zone from reflector learn results |
+| GET/POST | `/api/radar/learn-static` | Start/check static reflector learning |
+| GET/POST | `/api/zones` | Zone definitions (JSON array) |
+| GET | `/api/events` | Paginated event log (`?offset=&limit=&type=`) |
+| POST | `/api/events/clear` | Clear event history |
 
 ---
 
@@ -401,12 +414,16 @@ The HLK-LD2412 sensor has several known firmware issues:
 
 ## Roadmap
 
+- [x] i18n (CZ/EN toggle in web GUI) — **v4.5.1**
+- [x] Fusion-driven alarm (CSI-only triggers, radar FP suppression) — **v4.5.0**
+- [x] Auto-zones from reflector learning — **v4.5.0**
+- [x] Event timeline with 24h heatmap — **v4.5.0**
+- [x] Multi-sensor mesh verification — **v4.5.0**
 - [ ] NBVI subcarrier auto-selection (per-environment optimal band)
 - [ ] ML neural network detector (MLP trained on local CSI data)
 - [ ] Adaptive threshold (P95-based instead of mean × 1.5)
 - [ ] Auto-recalibration after quiet period
 - [ ] Stuck-in-motion detection (auto threshold raise after 24h)
-- [ ] i18n (CZ/EN toggle in web GUI)
 
 ---
 
@@ -440,6 +457,8 @@ A: Radar: up to 6m (configurable). CSI: depends on AP distance and environment �
 | v4.1.3-poe-wifi | ESP32Async HTTP library swap for stability |
 | v4.1.4-poe-wifi | CSI runtime config, GUI tab, diagnostics |
 | v4.2.0-poe-wifi | ESPectre port: Hampel, low-pass, CV normalization, DNS traffic gen, breathing hold, HT20/11n, entry/exit path validation, event timeline, 50ms radar tick |
+| v4.5.0-poe-wifi | Fusion alarm (CSI-only trigger, radar FP suppression), auto-zones from learning, event timeline UI with 24h heatmap, OTA delay fix, traffic gen tuning (port/ICMP/PPS), mesh verification, supervision heartbeat |
+| v4.5.1-poe-wifi | CZ/EN language toggle (i18n), DMS millis() overflow fix (49-day crash), GUI traffic generator controls |
 
 ---
 
