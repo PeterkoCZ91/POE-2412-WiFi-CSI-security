@@ -129,15 +129,15 @@ const char index_html[] PROGMEM = R"rawliteral(
       csi_restart: "Změna povolení CSI vyžaduje restart ESP. Restartovat teď?",
       calib_started: "Kalibrace zahájena (10s, neobývej místnost)",
       reset_confirm: "Resetovat idle baseline? CSI bude N sekund znovu sbírat vzorky.",
-      no_events: "No events", del_history: t('del_history'),
-      noise_calib: t('noise_calib'),
+      no_events: "Žádné události", del_history: "Smazat celou historii?",
+      noise_calib: "Spustit kalibraci šumu? (60s, nepohybujte se před senzorem)",
       tg_error: "Chyba", tg_unknown: "Neznámá",
       zone_name: "Název", zone_immediate: "🚨 Okamžité", zone_delay: "Zpoždění (ms)",
       zone_behavior: "Chování alarmu v zóně",
-      zone_default: "Zóna", zones_saved: t('zones_saved'), save_error: t('save_error'),
+      zone_default: "Zóna", zones_saved: "Zóny uloženy", save_error: "Chyba při ukládání",
       starting: "Spouštím...", apply: "Použít",
-      zone_added: "' + t('zone_added') + '",
-      gates_saved: t('gates_saved'), gates_error: t('gates_error'),
+      zone_added: "→ Zóna přidána, nezapomeň uložit!",
+      gates_saved: "Hradla uložena", gates_error: "Chyba při ukládání hradel",
       preset_applied: "Předvolba nastavena", restarting: "Restartování...",
       enter_creds: t('enter_creds'), pass_mismatch: t('pass_mismatch'),
       pass_changed: "Heslo změněno", creds_changed: "Přihlašovací údaje změněny. Zařízení se restartuje.",
@@ -147,12 +147,13 @@ const char index_html[] PROGMEM = R"rawliteral(
       no_timeline: "<tspan data-i18n="no_timeline">Nedostatek dat pro timeline</tspan>",
       tgen_mode: "Režim", tgen_port: "Cílový port", tgen_pps: "<span data-i18n="tgen_pps">Paketů/s (PPS):</span>",
       actions: "AKCE", config: "<span data-i18n="config">KONFIGURACE</span>",
-      not_enough: "t('not_enough')", static_label: "Statika",
+      not_enough: "Nedostatek dat.", static_label: "Statika",
       auto_calib: "📐 Auto-kalibrace prahu (10s)", reset_baseline: "♻️ Reset idle baseline",
       reconnect_wifi: "📶 Reconnect WiFi",
+      csi_help: "<b>Auto-kalibrace:</b> 10s vzorkuje variance v klidu, nastaví práh = mean×1.5. Použij v prázdné místnosti.<br><b>Reset baseline:</b> vyčistí idle hodnoty. Po přesunu senzoru.<br><b>Reconnect WiFi:</b> restart asociace při RSSI dropech.",
       detection_src: "Zdroj detekce", fusion_enabled: "Fusion povoleno",
       enabled: "Povoleno",
-      hysteresis: "<span data-i18n="hysteresis">Hystereze (exit multiplier):</span>", window_size: "<span data-i18n="window_size">Velikost okna (vzorky):</span>",
+      hysteresis: "Hystereze (exit multiplier):", window_size: "Velikost okna (vzorky):",
       pub_interval: "<span data-i18n="pub_interval">Interval publikace (ms):</span>",
     },
     en: {
@@ -221,6 +222,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       not_enough: "Not enough data.", static_label: "Static",
       auto_calib: "📐 Auto-calibrate threshold (10s)", reset_baseline: "♻️ Reset idle baseline",
       reconnect_wifi: "📶 Reconnect WiFi",
+      csi_help: "<b>Auto-calibration:</b> 10s variance sampling in idle, sets threshold = mean×1.5. Use in empty room.<br><b>Reset baseline:</b> clears idle values. After moving sensor.<br><b>Reconnect WiFi:</b> restarts association on RSSI drops.",
       detection_src: "Detection source", fusion_enabled: "Fusion enabled",
       enabled: "Enabled",
       hysteresis: "Hysteresis (exit multiplier):", window_size: "Window size (samples):",
@@ -660,9 +662,9 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <div id="csi_calib_fill" style="height:100%; width:0%; background:var(--accent); transition:width 0.3s"></div>
             </div>
             <div style="font-size:0.75rem; color:#777; margin-top:8px">
-                <b>Auto-kalibrace:</b> 10 sekund vzorkuje variance v klidu, nastaví práh = mean × 1.5. Použij když je v místnosti nikdo.<br>
+                <span data-i18n="csi_help"><b>Auto-kalibrace:</b> 10 sekund vzorkuje variance v klidu, nastaví práh = mean × 1.5. Použij když je v místnosti nikdo.<br>
                 <b>Reset baseline:</b> vyčistí naučené idle hodnoty (turbulence, fáze). Po přesunu senzoru.<br>
-                <b>Reconnect WiFi:</b> přerušení / RSSI dropy řeší restart asociace.
+                <b>Reconnect WiFi:</b> přerušení / RSSI dropy řeší restart asociace.</span>
             </div>
         </div>
     </div>
@@ -1330,7 +1332,7 @@ function renderZones() {
         const ab = z.alarm_behavior ?? 0;
         h += `<div style="margin-bottom:5px; background:#222; padding:5px; border-radius:5px; border-left:3px solid ${ZONE_COLORS[ab]||'#444'}">
             <div style="display:flex; gap:5px; margin-bottom:5px">
-                <input type="text" value="${z.name}" id="z_name_${i}" style="flex:2" placeholder="Název">
+                <input type="text" value="${z.name}" id="z_name_${i}" style="flex:2" placeholder="" data-i18n="zone_name">
                 <input type="number" value="${z.min}" id="z_min_${i}" style="flex:1" placeholder="Od (cm)">
                 <input type="number" value="${z.max}" id="z_max_${i}" style="flex:1" placeholder="Do (cm)">
             </div>
@@ -1341,13 +1343,13 @@ function renderZones() {
                     <option value="2" ${z.level==2?'selected':''}>Warn</option>
                     <option value="3" ${z.level==3?'selected':''}>ALARM</option>
                 </select>
-                <select id="z_ab_${i}" style="flex:2" title="Chování alarmu v zóně">
+                <select id="z_ab_${i}" style="flex:2" title="" data-i18n="zone_behavior">
                     <option value="0" ${ab==0?'selected':''}>⏱ Entry delay</option>
-                    <option value="1" ${ab==1?'selected':''}>🚨 Okamžité</option>
+                    <option value="1" ${ab==1?'selected':''}data-i18n="zone_immediate">🚨 Okamžité</option>
                     <option value="2" ${ab==2?'selected':''}>🔕 Ignorovat</option>
                     <option value="3" ${ab==3?'selected':''}>📡 Ignorovat statiku</option>
                 </select>
-                <input type="number" value="${z.delay||0}" id="z_del_${i}" style="flex:1" placeholder="Zpoždění (ms)">
+                <input type="number" value="${z.delay||0}" id="z_del_${i}" style="flex:1" placeholder="" data-i18n="zone_delay">
                 <input type="checkbox" id="z_en_${i}" ${z.enabled!==false?'checked':''} style="width:auto">
                 <button onclick="delZone(${i})" class="warn" style="width:auto; margin:0; padding:5px 10px">×</button>
             </div>
@@ -1437,9 +1439,9 @@ function pollLearn() {
             $('btn_learn').disabled = false;
             let txt = `✅ Hotovo! Top gate: ${d.top_gate} (~${d.top_cm}cm), confidence: ${d.confidence}%`;
             if (d.suggest_ready) {
-                txt += ` <button onclick="applyLearnZone(${d.suggest_min_cm},${d.suggest_max_cm})" class="sec" style="padding:2px 8px; margin-left:6px">Použít</button>`;
+                txt += ` <button onclick="applyLearnZone(${d.suggest_min_cm},${d.suggest_max_cm})" class="sec" style="padding:2px 8px; margin-left:6px">${t('apply')}</button>`;
             } else {
-                txt += ' ⚠️ t('not_enough')';
+                txt += ' ⚠️ ' + t('not_enough');
             }
             stat.innerHTML = txt;
         } else {
