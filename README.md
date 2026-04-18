@@ -3,14 +3,16 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/MCU-ESP32--WROOM--32-blue?logo=espressif)](https://www.espressif.com/)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.5.1--poe--wifi-blue)]()
+[![Version](https://img.shields.io/badge/Version-4.5.3--poe--wifi-blue)]()
 
 **Dual-sensor intrusion detection system** — ESP32 + HLK-LD2412 24 GHz mmWave radar + **WiFi CSI (Channel State Information) passive motion detection** over **wired Ethernet with Power over Ethernet**. Full alarm state machine, zone management, Home Assistant integration, Telegram bot, and a dark-mode web dashboard. No cloud required.
 
 WiFi CSI detection algorithms based on [ESPectre](https://github.com/francescopace/espectre) by Francesco Pace (GPLv3).
 
 > [!TIP]
-> **New in v4.5.1** — Fusion-driven alarm (CSI-only triggers alarm, radar FP suppressed), auto-zones from reflector learning, CZ/EN language toggle, event timeline with 24h heatmap, configurable traffic generator (UDP/ICMP/PPS), multi-sensor mesh verification, DMS overflow fix.
+> **Latest v4.5.3** — OTA hardening: bound-checked HTTP body uploads (`/api/zones`, `/api/config/import`, `/api/security/event/ack`), `Update.end` now guarded by `Update.hasError()`, static `otaAuthorized` flag restored (fixes 64KB Digest re-auth stall on ETH).
+>
+> **v4.5.x features** — Fusion-driven alarm (CSI-only triggers alarm, radar FP suppressed), auto-zones from reflector learning, CZ/EN language toggle, event timeline with 24h heatmap, configurable traffic generator (UDP/ICMP/PPS), multi-sensor mesh verification, DMS overflow fix.
 
 ---
 
@@ -106,8 +108,8 @@ WiFi CSI detection algorithms based on [ESPectre](https://github.com/francescopa
 
 ```bash
 # 1. Clone
-git clone https://github.com/PeterkoCZ91/POE-2412-WiFi-CSI-security.git
-cd POE-2412-WiFi-CSI-security
+git clone https://github.com/PeterkoCZ91/HLK-LD2412-POE-WiFi-CSI-security.git
+cd HLK-LD2412-POE-WiFi-CSI-security
 
 # 2. Create your config files (BOTH are required — build fails without them)
 cp include/secrets.h.example include/secrets.h
@@ -265,7 +267,7 @@ Default credentials: `admin` / `admin` — **change immediately** in the Network
 ## System Architecture
 
 ```
-POE-2412-WiFi-CSI-security/
+HLK-LD2412-POE-WiFi-CSI-security/
 ├── include/
 │   ├── secrets.h.example          # MQTT, WiFi CSI credentials (copy to secrets.h)
 │   ├── known_devices.h.example    # Device MAC→name mapping
@@ -334,28 +336,84 @@ The CSI tab shows live turbulence, composite score, packet rate, traffic generat
 
 ## API Reference
 
+All endpoints require Digest auth except where noted.
+
+### Status & Telemetry
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Uptime, Ethernet info, MQTT, heap, CSI status, reset history |
 | GET | `/api/telemetry` | Radar state, distance, energy, UART stats |
-| GET/POST | `/api/config` | Full system configuration |
+| GET | `/api/version` | Firmware version string (no auth — used by GUI before login) |
+| GET/DELETE | `/api/debug` | Last 4 KB of DBG() ring buffer; DELETE clears it |
+
+### Alarm & Security
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/alarm/status` | Alarm state, current zone, debounce, last event |
 | POST | `/api/alarm/arm` | Arm system (`?immediate=1` for no delay) |
 | POST | `/api/alarm/disarm` | Disarm system |
-| POST | `/api/alarm/config` | Entry/exit delay, debounce frames, disarm reminder |
+| GET/POST | `/api/alarm/config` | Entry/exit delay, debounce frames, disarm reminder |
 | GET/POST | `/api/security/config` | Anti-masking, loitering, heartbeat, pet immunity |
+| POST | `/api/security/event/ack` | Acknowledge a security event |
 | GET/POST | `/api/schedule` | Scheduled arm/disarm times |
 | GET/POST | `/api/timezone` | Timezone and DST offset |
+
+### Events & Logs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/events` | Paginated event log (`?offset=&limit=&type=`) |
 | GET | `/api/events/csv` | Download events as CSV |
-| GET/POST | `/api/csi` | CSI metrics, config, diagnostics (CSI variant) |
+| POST | `/api/events/clear` | Clear event history |
+| GET/DELETE | `/api/logs` | Structured log query / clear |
+
+### Radar
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/radar/restart` | Restart radar (UART reset) |
+| POST | `/api/radar/factory_reset` | Restore radar to factory defaults |
+| POST | `/api/radar/calibrate` | Start radar calibration |
+| POST | `/api/engineering` | Toggle engineering mode (raw gate data) |
+| POST | `/api/radar/gate` | Set per-gate threshold (moving/static) |
+| POST | `/api/radar/gates` | Bulk gate-threshold update (JSON body) |
+| GET | `/api/radar/resolution` | Query resolution mode (0.75m / 0.50m / 0.20m) |
+| GET/POST | `/api/radar/light` | Light function and threshold |
+| GET/POST | `/api/radar/timeout` | Presence hold time |
+| GET/POST | `/api/radar/learn-static` | Start/check static reflector learning |
+| POST | `/api/radar/apply-learn` | Auto-create ignore zone from reflector learn results |
+| GET/POST | `/api/zones` | Zone definitions (JSON array) |
+
+### WiFi CSI (CSI build only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/csi` | CSI metrics, config, diagnostics |
 | POST | `/api/csi/calibrate` | Auto-calibrate CSI threshold |
 | POST | `/api/csi/reset_baseline` | Reset CSI idle baselines |
 | POST | `/api/csi/reconnect` | Force WiFi reconnect for CSI |
-| POST | `/api/radar/apply-learn` | Auto-create ignore zone from reflector learn results |
-| GET/POST | `/api/radar/learn-static` | Start/check static reflector learning |
-| GET/POST | `/api/zones` | Zone definitions (JSON array) |
-| GET | `/api/events` | Paginated event log (`?offset=&limit=&type=`) |
-| POST | `/api/events/clear` | Clear event history |
+
+### Configuration & OTA
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/config` | Full system configuration |
+| GET/POST | `/api/mqtt/config` | MQTT server/port/user/pass/id |
+| GET/POST | `/api/telegram/config` | Telegram bot token and chat id |
+| POST | `/api/telegram/test` | Send a test Telegram message |
+| POST | `/api/auth/config` | Change web admin user/password |
+| GET/POST | `/api/network/config` | Static IP and DNS |
+| GET | `/api/config/export` | Download JSON snapshot of all settings |
+| POST | `/api/config/import` | Upload JSON to restore settings (reboots) |
+| GET | `/api/config/snapshots` | List NVS config snapshots |
+| POST | `/api/config/restore` | Restore a named snapshot |
+| POST | `/api/preset` | Apply a named preset |
+| POST | `/api/update` | OTA firmware upload (multipart) |
+| POST | `/api/restart` | Soft reboot |
+| POST | `/api/bluetooth/start` | Enable BLE config mode |
+| DELETE/POST | `/api/www` | Manage LittleFS web assets (delete / upload) |
 
 ---
 
@@ -459,6 +517,7 @@ A: Radar: up to 6m (configurable). CSI: depends on AP distance and environment �
 | v4.2.0-poe-wifi | ESPectre port: Hampel, low-pass, CV normalization, DNS traffic gen, breathing hold, HT20/11n, entry/exit path validation, event timeline, 50ms radar tick |
 | v4.5.0-poe-wifi | Fusion alarm (CSI-only trigger, radar FP suppression), auto-zones from learning, event timeline UI with 24h heatmap, OTA delay fix, traffic gen tuning (port/ICMP/PPS), mesh verification, supervision heartbeat |
 | v4.5.1-poe-wifi | CZ/EN language toggle (i18n), DMS millis() overflow fix (49-day crash), GUI traffic generator controls |
+| v4.5.3-poe-wifi | OTA hardening: static auth flag (fixes 64KB Digest re-auth stall), `Update.end` guarded by `hasError()`, `Update.abort()` on error path; bound-checked HTTP body uploads |
 
 ---
 
