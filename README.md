@@ -521,6 +521,16 @@ A: Radar: up to 6m (configurable). CSI: depends on AP distance and environment �
 
 ---
 
+## Related Projects
+
+- **[multi-sensor-fusion](https://github.com/PeterkoCZ91/multi-sensor-fusion)** — Python service that fuses this node's MQTT output with additional LD2412 / LD2450 nodes, standalone WiFi CSI (ESPectre), and Home Assistant sensors into a single weighted-average presence confidence per room. Ships with data-driven weight tuning tools.
+- **[HLK-LD2412-security](https://github.com/PeterkoCZ91/HLK-LD2412-security)** — The WiFi variant of the LD2412 node.
+- **[HLK-LD2412-POE-security](https://github.com/PeterkoCZ91/HLK-LD2412-POE-security)** — The PoE variant without CSI.
+- **[HLK-LD2450-security](https://github.com/PeterkoCZ91/HLK-LD2450-security)** — Sister project using the 2D LD2450 radar.
+- **[espectre](https://github.com/francescopace/espectre)** — The upstream standalone WiFi CSI motion detection project this firmware's CSI pipeline is based on.
+
+---
+
 ## Acknowledgments
 
 - **[Francesco Pace](https://github.com/francescopace)** — [ESPectre](https://github.com/francescopace/espectre) WiFi CSI motion detection (GPLv3). CSI algorithms, filtering pipeline, and traffic generation concepts ported to this project.
