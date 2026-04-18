@@ -567,7 +567,7 @@ void setupConfigRoutes() {
         }
 
         char* buf = (char*)request->_tempObject;
-        if (buf) {
+        if (buf && index + len <= total) {
             memcpy(buf + index, data, len);
             buf[index + len] = '\0';
         }
@@ -644,7 +644,7 @@ void setupConfigRoutes() {
         }
 
         char* buf = (char*)request->_tempObject;
-        if (buf) {
+        if (buf && index + len <= total) {
             memcpy(buf + index, data, len);
             buf[index + len] = '\0';
         }
@@ -719,10 +719,18 @@ void setupSystemRoutes() {
             *_deps.shouldReboot = true;
         }
     }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-        // Auth only on first chunk — repeated digest validation during multipart stream
-        // causes connection drop on ETH (LAN8720A) after first 64KB buffer
-        if (!index && !checkAuth(request)) return;
+        // Auth check on first chunk only — Digest auth re-validation on subsequent
+        // chunks causes connection drop on ETH (LAN8720A) after 64KB buffer.
+        // Use static flag to track auth state across chunks of same upload.
+        static bool otaAuthorized = false;
         if (!index) {
+            otaAuthorized = false;
+            if (!request->authenticate(_deps.config->auth_user, _deps.config->auth_pass)) {
+                DBG("OTA", "Upload auth failed");
+                request->requestAuthentication();
+                return;
+            }
+            otaAuthorized = true;
             DBG("OTA", "Update start: %s (%u bytes)", filename.c_str(), request->contentLength());
             // Save config snapshot before flash starts
             if (_deps.configSnapshot && _deps.preferences) {
@@ -734,6 +742,7 @@ void setupSystemRoutes() {
                 Update.printError(Serial);
             }
         }
+        if (!otaAuthorized) return;  // Skip data from unauthenticated request
         if (!Update.hasError()) {
             if (Update.write(data, len) != len) {
                 Update.printError(Serial);
@@ -741,12 +750,14 @@ void setupSystemRoutes() {
             esp_task_wdt_reset(); // keep WDT alive during long OTA transfers
         }
         if (final) {
-            if (Update.end(true)) {
+            if (!Update.hasError() && Update.end(true)) {
                 DBG("OTA", "Update success: %u B — reboot scheduled", index + len);
                 *_deps.shouldReboot = true;  // Reboot even if response never sends (nginx proxy 502)
             } else {
                 Update.printError(Serial);
+                Update.abort();
             }
+            otaAuthorized = false;  // Reset auth state for next upload
         }
     });
 
@@ -894,7 +905,7 @@ void setupSystemRoutes() {
         }
 
         char* buf = (char*)request->_tempObject;
-        if (buf) {
+        if (buf && index + len <= total) {
             memcpy(buf + index, data, len);
             buf[index + len] = '\0';
         }

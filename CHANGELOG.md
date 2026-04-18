@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.5.3-poe-wifi] - 2026-04-18
+
+### Fixed
+- **OTA Digest re-auth stall at 64KB** — auth now runs once on first chunk and is tracked via static `otaAuthorized` flag; previously AsyncWebServer re-validated Digest auth on each chunk, causing ETH connection drop on LAN8720A after 64KB buffer
+- **OTA commit guard** — `Update.end(true)` now runs only when `Update.hasError()` is false; on error path `Update.abort()` is called to discard partial image instead of potentially committing a corrupted firmware
+- **OTA auth flag reset** — `otaAuthorized` cleared on `final` chunk (success or error) so stale auth state cannot leak into subsequent uploads
+- **Web body upload bounds check** — `/api/zones`, `/api/config/import`, and `/api/security/event/ack` body handlers now verify `index + len <= total` before `memcpy()` to prevent heap overflow if a malformed client sends more data than declared `total`
+
 ## [4.5.1-poe-wifi] - 2026-04-18
 
 ### Added
