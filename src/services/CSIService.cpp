@@ -115,6 +115,8 @@ void CSIService::begin(const char* ssid, const char* password,
     snprintf(_tBreathing,  sizeof(_tBreathing),  "%s/breathing_score", _topicPrefix);
     snprintf(_tComposite,  sizeof(_tComposite),  "%s/composite_score", _topicPrefix);
     snprintf(_tPackets,    sizeof(_tPackets),     "%s/packets",        _topicPrefix);
+    snprintf(_tDser,       sizeof(_tDser),       "%s/dser",            _topicPrefix);
+    snprintf(_tPlcr,       sizeof(_tPlcr),       "%s/plcr",            _topicPrefix);
 
     // Allocate turbulence buffer
     _turbBuffer = new (std::nothrow) float[_windowSize];
@@ -434,6 +436,34 @@ void CSIService::_processCSI(wifi_csi_info_t* info) {
 
     if (numAmps < 2) return;
 
+    // --- DSER + PLCR (Uni-Fi features, arXiv 2601.10980) ---
+    // amps[]/phases[] already in cache from extraction loop above.
+    // numAmps == NUM_SUBCARRIERS in HT20 (all SUBCARRIERS indices < totalSc=64).
+    {
+        float dserSum = 0.0f;
+        float dphaseSqSum = 0.0f;
+        for (uint8_t i = 0; i < numAmps; i++) {
+            _csiStatic[i] = DSER_STATIC_ALPHA * amps[i]
+                          + (1.0f - DSER_STATIC_ALPHA) * _csiStatic[i];
+            float Hd = amps[i] - _csiStatic[i];
+            float Hs = _csiStatic[i];
+            dserSum += logf((Hd * Hd + DSER_EPS) / (Hs * Hs + DSER_EPS));
+
+            if (_hasPrevPhase) {
+                float dp = phases[i] - _csiPhasePrev[i];
+                while (dp >  (float)M_PI) dp -= 2.0f * (float)M_PI;
+                while (dp < -(float)M_PI) dp += 2.0f * (float)M_PI;
+                dphaseSqSum += dp * dp;
+            }
+            _csiPhasePrev[i] = phases[i];
+        }
+        _lastDser = dserSum / numAmps;
+        _lastPlcr = _hasPrevPhase
+                    ? sqrtf(dphaseSqSum / numAmps) / (2.0f * (float)M_PI)
+                    : 0.0f;
+        _hasPrevPhase = true;
+    }
+
     // --- Spatial turbulence (two-pass variance, CV normalized) ---
     float ampSum = 0;
     for (uint8_t i = 0; i < numAmps; i++) ampSum += amps[i];
@@ -710,6 +740,12 @@ void CSIService::_publishMQTT() {
 
     snprintf(val, sizeof(val), "%lu", (unsigned long)_totalPackets);
     _mqtt->publish(_tPackets, val);
+
+    snprintf(val, sizeof(val), "%.4f", _lastDser);
+    _mqtt->publish(_tDser, val);
+
+    snprintf(val, sizeof(val), "%.4f", _lastPlcr);
+    _mqtt->publish(_tPlcr, val);
 }
 
 // ============================================================================
@@ -755,10 +791,16 @@ void CSIService::update() {
     static uint32_t lastDiag = 0;
     if (millis() - lastDiag > 30000) {
         lastDiag = millis();
+        int rssi = WiFi.RSSI();
         DBG("CSI", "diag: pps=%.1f pkts=%lu tgen=%d wifi=%d ip=%s rssi=%d",
             _packetRate, (unsigned long)_totalPackets,
             _trafficGenRunning.load() ? 1 : 0,
-            WiFi.status(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
+            WiFi.status(), WiFi.localIP().toString().c_str(), rssi);
+        if (rssi > -40) {
+            DBG("CSI", "RSSI WARN: %d dBm — too strong, may saturate near-AP", rssi);
+        } else if (rssi < -70) {
+            DBG("CSI", "RSSI WARN: %d dBm — too weak, low SNR", rssi);
+        }
     }
 
     uint32_t now = millis();
@@ -820,6 +862,11 @@ void CSIService::resetIdleBaseline() {
     _hampelState.count = 0;
     _lowpassState.initialized = false;
     if (_turbBuffer) memset(_turbBuffer, 0, _windowSize * sizeof(float));
+    memset(_csiStatic,    0, sizeof(_csiStatic));
+    memset(_csiPhasePrev, 0, sizeof(_csiPhasePrev));
+    _hasPrevPhase = false;
+    _lastDser = 0.0f;
+    _lastPlcr = 0.0f;
     Serial.println("[CSI] Idle baseline reset — recollecting samples");
 }
 

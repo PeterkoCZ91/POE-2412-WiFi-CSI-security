@@ -46,6 +46,8 @@ public:
     float getRatioTurbulence() const { return _lastRatioTurb; }
     float getBreathingScore() const;
     float getCompositeScore() const;
+    float getDser() const { return _lastDser; }
+    float getPlcr() const { return _lastPlcr; }
     bool  getMotionState() const { return _motionState; }
     float getVariance() const { return _runningVariance; }
     uint32_t getPacketCount() const { return _totalPackets; }
@@ -127,6 +129,15 @@ private:
     float _lastRatioTurb = 0.0f;
     float _lastAmpSum = 0.0f;  // for idle baseline tracking
 
+    // DSER/PLCR (Uni-Fi features, arXiv 2601.10980)
+    float _lastDser = 0.0f;
+    float _lastPlcr = 0.0f;
+    float _csiStatic[NUM_SUBCARRIERS] = {0};       // per-SC slow EMA amplitude (H_s)
+    float _csiPhasePrev[NUM_SUBCARRIERS] = {0};    // per-SC previous phase (t-1)
+    bool  _hasPrevPhase = false;
+    static constexpr float DSER_STATIC_ALPHA = 0.01f;  // ~100-packet EMA time constant
+    static constexpr float DSER_EPS = 1e-3f;
+
     // Hampel filter state (MAD-based outlier removal)
     static constexpr uint8_t HAMPEL_WINDOW = 7;
     static constexpr float HAMPEL_THRESHOLD = 5.0f;
@@ -207,6 +218,8 @@ private:
     char _tBreathing[80] = {};
     char _tComposite[80] = {};
     char _tPackets[80] = {};
+    char _tDser[80] = {};
+    char _tPlcr[80] = {};
 };
 
 #endif // CSI_SERVICE_H

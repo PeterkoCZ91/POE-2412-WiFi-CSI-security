@@ -43,7 +43,7 @@
 // -------------------------------------------------------------------------
 #ifndef FW_VERSION
 #include <Update.h>
-#define FW_VERSION "v4.5.3-poe-wifi"
+#define FW_VERSION "v4.5.4-poe-wifi"
 #endif
 #define WDT_TIMEOUT_SECONDS 60
 
@@ -1242,6 +1242,8 @@ void loop() {
             csi["motion"]    = csiService.getMotionState();
             csi["composite"] = csiService.getCompositeScore();
             csi["variance"]  = csiService.getVariance();
+            csi["dser"]      = csiService.getDser();
+            csi["plcr"]      = csiService.getPlcr();
             csi["pps"]       = csiService.getPacketRate();
             csi["packets"]   = csiService.getPacketCount();
             csi["rssi"]      = csiService.getWifiRSSI();

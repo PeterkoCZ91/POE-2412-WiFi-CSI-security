@@ -1441,6 +1441,8 @@ void setupCSIRoutes() {
             doc["phase_turb"]  = _deps.csiService->getPhaseTurbulence();
             doc["ratio_turb"]  = _deps.csiService->getRatioTurbulence();
             doc["breathing"]   = _deps.csiService->getBreathingScore();
+            doc["dser"]        = _deps.csiService->getDser();
+            doc["plcr"]        = _deps.csiService->getPlcr();
             doc["variance"]    = _deps.csiService->getVariance();
             doc["packets"]     = (uint32_t)_deps.csiService->getPacketCount();
             doc["pps"]         = _deps.csiService->getPacketRate();
